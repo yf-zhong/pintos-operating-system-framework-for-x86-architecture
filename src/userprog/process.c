@@ -285,12 +285,12 @@ void push_stack(void** esp, void* src, size_t size) {
 void add_args(const char* file_name, void** esp) {
   char* file_name_cpy = (char*) malloc(sizeof(char) * (strlen(file_name) + 1));
   char* file_name_cpy_base = file_name_cpy;
-  strlcpy(file_name_cpy, file_name, strlen(file_name) + 1);
   int nArgs = count_args(file_name_cpy);
   char** args = (char**) malloc(sizeof(char*) * nArgs);
   char* arg;
   int argIndex = 0;
   unsigned int allByteCount = sizeof(char*) * (nArgs + 1) + sizeof(char**) + sizeof(int);
+  strlcpy(file_name_cpy, file_name, strlen(file_name) + 1);
   // get all arguments in file_name_cpy
   char** saveptr = &file_name_cpy;
   arg = strtok_r(file_name_cpy, " ", saveptr);
@@ -311,18 +311,15 @@ void add_args(const char* file_name, void** esp) {
     argsAddrInStack[argIndex] = (char*) *esp;
   }
   // push stack-aglin onto user stack
-  arg = "\0";
   argByteCount = sizeof(uint8_t) * ((0b10000 - (allByteCount & 0b1111)) & 0b1111);
-  for (int i = 0; i < argByteCount; i++) {
-    push_stack(esp, arg, sizeof(uint8_t));
-  }
+  uint8_t *arg_zeros = calloc(argByteCount / sizeof(uint8_t), sizeof(uint8_t));
+  push_stack(esp, arg_zeros, sizeof(uint8_t) * argByteCount);
+  free(arg_zeros);
   // push NULL ptr after stack-aglin by convention
   char* null_ptr = (char*) NULL;
   push_stack(esp, &null_ptr, sizeof(char*));
   // push all pointers to argument onto the user stack
-  for (argIndex = nArgs - 1; argIndex >= 0; argIndex--) {
-    push_stack(esp, &argsAddrInStack[argIndex], sizeof(char*));
-  }
+  push_stack(esp, argsAddrInStack, sizeof(char*) * nArgs);
   // push argv onto stack
   char** argv_0 = *esp;
   push_stack(esp, &argv_0, sizeof(char**));
