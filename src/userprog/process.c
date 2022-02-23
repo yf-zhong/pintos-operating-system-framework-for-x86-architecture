@@ -427,6 +427,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   success = true;
 
   add_args(file_name, esp);
+  *esp -= sizeof(void*); // fake return address
 
 done:
   /* We arrive here whether the load is successful or not. */
