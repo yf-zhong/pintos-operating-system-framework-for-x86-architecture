@@ -290,7 +290,7 @@ void add_args(const char* file_name, void** esp) {
   char** args = (char**) malloc(sizeof(char*) * nArgs);
   char* arg;
   int argIndex = 0;
-  int allByteCount = sizeof(char*) * (nArgs + 1) + sizeof(char**) + sizeof(int);
+  unsigned int allByteCount = sizeof(char*) * (nArgs + 1) + sizeof(char**) + sizeof(int);
   // get all arguments in file_name_cpy
   char** saveptr = &file_name_cpy;
   arg = strtok_r(file_name_cpy, " ", saveptr);
