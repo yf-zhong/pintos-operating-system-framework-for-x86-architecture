@@ -20,7 +20,7 @@ typedef tid_t pid_t;
 typedef void (*pthread_fun)(void*);
 typedef void (*stub_fun)(pthread_fun, void*);
 
-struct child {
+typedef struct child {
    pid_t pid;
    struct semaphore exec_sema;
    struct semaphore wait_sema;
@@ -31,7 +31,7 @@ struct child {
    int ref_cnt;      // need lock
    struct lock lock;
    struct list_elem elem; // need lock(?
-};
+} CHILD;
 
 /* The process control block for a given process. Since
    there can be multiple threads per process, we need a separate
@@ -43,6 +43,8 @@ struct process {
   uint32_t* pagedir;          /* Page directory. */
   char process_name[16];      /* Name of the main thread */
   struct thread* main_thread; /* Pointer to main thread */
+  struct lock c_lock;
+  char for_testing[10];
   struct list children;
   struct child* curr_as_child;
 };
