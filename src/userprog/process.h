@@ -10,8 +10,6 @@
 #define MAX_STACK_PAGES (1 << 11)
 #define MAX_THREADS 127
 #define ERROR -1
-#define TO_BE_LOADED -2
-#define LOADED -3
 
 
 /* PIDs and TIDs are the same type. PID should be
@@ -26,8 +24,10 @@ struct child {
    pid_t pid;
    struct semaphore exec_sema;
    struct semaphore wait_sema;
+   int exit_status;
+   bool is_exited;
+   bool is_loaded;
    bool is_waiting;  // need lock
-   int proc_status; // need lock
    int ref_cnt;      // need lock
    struct lock lock;
    struct list_elem elem; // need lock(?

@@ -48,8 +48,11 @@ struct child* new_child() {
   struct child* cptr = (struct child*) malloc(sizeof(struct child));
   sema_init(&cptr->exec_sema, 0);
   sema_init(&cptr->wait_sema, 0);
+  cptr-> exit_status = ERROR;
+  cptr->is_exited = false;
+  cptr->is_loaded = false;
   cptr->is_waiting = false;
-  cptr-> proc_status = TO_BE_LOADED;
+  
   cptr->ref_cnt = 2;
   lock_init(&cptr->lock);
   return cptr;
@@ -75,6 +78,15 @@ pid_t process_execute(const char* file_name) {
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create(file_name, PRI_DEFAULT, start_process, spaptr);
+  sema_down(&spaptr->new_c->exec_sema);
+  if (!spaptr->new_c->is_loaded) {
+    free(spaptr->new_c);
+  } 
+  else {
+    struct thread* t = thread_current();
+    list_push_front(t->pcb->children, spaptr->new_c);
+  }
+
   if (tid == TID_ERROR)
     palloc_free_page(spaptr);
   return tid;
@@ -102,7 +114,7 @@ static void start_process(void* spaptr_) {
   /* Allocate process control block */
   struct process* new_pcb = malloc(sizeof(struct process));
   success = pcb_success = new_pcb != NULL;
-  
+
   /* Initialize process control block */
   if (success) {
     // Ensure that timer_interrupt() -> schedule() -> process_activate()
@@ -117,7 +129,7 @@ static void start_process(void* spaptr_) {
     if_.cs = SEL_UCSEG;
     if_.eflags = FLAG_IF | FLAG_MBS;
     success = load(file_name, &if_.eip, &if_.esp);
-    t->pcb->curr_as_child->proc_status = LOADED;
+    new_c->is_loaded = true;
   }
 
   /* Handle failure with succesful PCB malloc. Must free the PCB */
@@ -126,12 +138,12 @@ static void start_process(void* spaptr_) {
     // If this happens, then an unfortuantely timed timer interrupt
     // can try to activate the pagedir, but it is now freed memory
     struct process* pcb_to_free = t->pcb;
+    new_c->is_loaded = false;
+    new_c->ref_cnt--;
     t->pcb = NULL;
     free(pcb_to_free);
-    t->pcb->curr_as_child->proc_status = ERROR;
-    t->pcb->curr_as_child->ref_count--;
   }
-  sema_up(&t->pcb->curr_as_child->exec_sema);
+  sema_up(&new_c->exec_sema);
 
   /* Clean up. Exit on failure or jump to userspace */
   palloc_free_page(file_name);
