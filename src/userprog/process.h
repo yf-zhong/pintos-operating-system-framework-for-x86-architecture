@@ -9,6 +9,10 @@
 // These defines will be used in Project 2: Multithreading
 #define MAX_STACK_PAGES (1 << 11)
 #define MAX_THREADS 127
+#define ERROR -1
+#define TO_BE_LOADED -2
+#define LOADED -3
+
 
 /* PIDs and TIDs are the same type. PID should be
    the TID of the main thread of the process */
@@ -22,7 +26,6 @@ struct child {
    pid_t pid;
    struct semaphore exec_sema;
    struct semaphore wait_sema;
-   char* file_name;
    bool is_waiting;  // need lock
    int proc_status; // need lock
    int ref_cnt;      // need lock
@@ -44,6 +47,8 @@ struct process {
   struct child* curr_as_child;
 };
 
+// NEW_c has to come first so that 
+// FILE_NAME can have the remaining space
  typedef struct start_proc_arg {
    struct child* new_c;
    char* file_name;
