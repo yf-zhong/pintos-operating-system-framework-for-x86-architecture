@@ -44,33 +44,57 @@ void userprog_init(void) {
   ASSERT(success);
 }
 
+struct child* new_child() {
+  struct child* cptr = (struct child*) malloc(sizeof(struct child));
+  sema_init(&cptr->exec_sema, 0);
+  sema_init(&cptr->wait_sema, 0);
+  cptr->is_waiting = false;
+  cptr-> proc_status = TO_BE_LOADED;
+  cptr->ref_cnt = 2;
+  lock_init(&cptr->lock);
+  return cptr;
+}
+
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
    process id, or TID_ERROR if the thread cannot be created. */
 pid_t process_execute(const char* file_name) {
-  char* fn_copy;
+  SPA* spaptr;
   tid_t tid;
 
   sema_init(&temporary, 0);
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
-  fn_copy = palloc_get_page(0);
-  if (fn_copy == NULL)
+  spaptr = palloc_get_page(0);
+  if (spaptr == NULL)
     return TID_ERROR;
-  strlcpy(fn_copy, file_name, PGSIZE);
+  strlcpy(spaptr->file_name, file_name, PGSIZE);
+  spaptr->new_c = new_child(spaptr->file_name);
+
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create(file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create(file_name, PRI_DEFAULT, start_process, spaptr);
   if (tid == TID_ERROR)
-    palloc_free_page(fn_copy);
+    palloc_free_page(spaptr);
   return tid;
+}
+
+void t_pcb_init(struct thread* t, struct process *new_pcb, struct child *new_c) {
+  new_pcb->pagedir = NULL;
+  t->pcb = new_pcb;
+  t->pcb->main_thread = t;
+  strlcpy(t->pcb->process_name, t->name, sizeof t->name);
+  list_init(t->pcb->children);
+  t->pcb->curr_as_child = new_c;
 }
 
 /* A thread function that loads a user process and starts it
    running. */
-static void start_process(void* file_name_) {
-  char* file_name = (char*)file_name_;
+static void start_process(void* spaptr_) {
+  SPA* spaptr = (SPA*) spaptr_;
+  char* file_name = spaptr->file_name;
+  struct child* new_c = spaptr->new_c;
   struct thread* t = thread_current();
   struct intr_frame if_;
   bool success, pcb_success;
@@ -78,17 +102,12 @@ static void start_process(void* file_name_) {
   /* Allocate process control block */
   struct process* new_pcb = malloc(sizeof(struct process));
   success = pcb_success = new_pcb != NULL;
-
+  
   /* Initialize process control block */
   if (success) {
     // Ensure that timer_interrupt() -> schedule() -> process_activate()
     // does not try to activate our uninitialized pagedir
-    new_pcb->pagedir = NULL;
-    t->pcb = new_pcb;
-
-    // Continue initializing the PCB as normal
-    t->pcb->main_thread = t;
-    strlcpy(t->pcb->process_name, t->name, sizeof t->name);
+    t_pcb_init(t, new_pcb, new_c);
   }
 
   /* Initialize interrupt frame and load executable. */
@@ -98,6 +117,7 @@ static void start_process(void* file_name_) {
     if_.cs = SEL_UCSEG;
     if_.eflags = FLAG_IF | FLAG_MBS;
     success = load(file_name, &if_.eip, &if_.esp);
+    t->pcb->curr_as_child->proc_status = LOADED;
   }
 
   /* Handle failure with succesful PCB malloc. Must free the PCB */
@@ -108,7 +128,10 @@ static void start_process(void* file_name_) {
     struct process* pcb_to_free = t->pcb;
     t->pcb = NULL;
     free(pcb_to_free);
+    t->pcb->curr_as_child->proc_status = ERROR;
+    t->pcb->curr_as_child->ref_count--;
   }
+  sema_up(&t->pcb->curr_as_child->exec_sema);
 
   /* Clean up. Exit on failure or jump to userspace */
   palloc_free_page(file_name);

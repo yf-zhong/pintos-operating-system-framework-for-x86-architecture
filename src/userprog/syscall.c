@@ -5,18 +5,35 @@
 #include "threads/thread.h"
 #include "userprog/process.h"
 #include "devices/shutdown.h"
+#include "threads/loader.h"
+#include "threads/vaddr.h"
 
 static void syscall_handler(struct intr_frame*);
 
 void syscall_init(void) { intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall"); }
 
-void practice(struct intr_frame* f, int i) {
+void sys_practice(struct intr_frame* f, int i) {
   f->eax = i + 1;
   return;
 }
 
-void halt() {
+void sys_halt() {
   shutdown_power_off();
+}
+
+void sys_exec(struct intr_frame* f, const char* cmd_line) {
+  // check if cmd_line valid
+  if (is_user_vaddr(cmd_line + strlen(cmd_line) + 1)) {
+    sys_exit(f, -1);
+  }
+  
+}
+
+
+void sys_exit(struct intr_frame* f, int status) {
+    f->eax = status;
+    printf("%s: exit(%d)\n", thread_current()->pcb->process_name, args[1]);
+    process_exit();
 }
 
 static void syscall_handler(struct intr_frame* f UNUSED) {
@@ -39,14 +56,16 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
   switch(args[0]) {
     case SYS_PRACTICE:
-      practice(f, args[1]);
+      sys_practice(f, args[1]);
       break;
     case SYS_HALT:
-      halt(f);
+      sys_halt(f);
       break;
     case SYS_WAIT:
       break;
     case SYS_EXEC:
       break;
+    case SYS_EXIT:
+
   }
 }
