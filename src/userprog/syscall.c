@@ -46,7 +46,7 @@ void sys_exec(struct intr_frame* f, const char* cmd_line) {
   if (is_valid_char_ptr(cmd_line)) {
     sys_exit(f, -1);
   }
-  
+  return process_execute(cmd_line);
 }
 
 
