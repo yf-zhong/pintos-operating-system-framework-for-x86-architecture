@@ -62,7 +62,6 @@ void sys_exit(struct intr_frame* f, int status) {
     decrement_children_ref_cnt(pcb);
     decrement_ref_cnt(pcb->curr_as_child);
     pcb->curr_as_child->exit_status = status;
-    sema_up(&pcb->curr_as_child->wait_sema);
     process_exit();
 }
 
@@ -78,12 +77,6 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
   /* printf("System call number: %d\n", args[0]); */
 
-  if (args[0] == SYS_EXIT) {
-    f->eax = args[1];
-    printf("%s: exit(%d)\n", thread_current()->pcb->process_name, args[1]);
-    process_exit();
-  }
-
   switch(args[0]) {
     case SYS_PRACTICE:
       sys_practice(f, args[1]);
@@ -92,10 +85,13 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       sys_halt();
       break;
     case SYS_WAIT:
+      sys_wait(f, args[1]);
       break;
     case SYS_EXEC:
+      sys_exec(f, args[1]);
       break;
     case SYS_EXIT:
+      sys_exit(f, args[1]);
       break;
   }
 }
