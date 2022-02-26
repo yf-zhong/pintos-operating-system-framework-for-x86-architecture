@@ -180,7 +180,7 @@ static void start_process(void* spaptr_) {
 }
 
 CHILD* find_child(pid_t pid) {
-  struct list* children = thread_current()->pcb->children;
+  struct list children = thread_current()->pcb->children;
   CHILD* cptr;
   for (struct list_elem *e = list_begin(&children); e != list_end(&children);
       e = list_next(e)) {
@@ -211,7 +211,7 @@ int process_wait(pid_t child_pid UNUSED) {
   if (child_to_wait->is_exited) {
     return child_to_wait->exit_status;
   }
-
+  return ERROR;
 }
 
 void decrement_ref_cnt(CHILD* cptr) {
@@ -243,7 +243,8 @@ void decrement_children_ref_cnt(struct process* pcb) {
 void process_exit(void) {
   struct thread* cur = thread_current();
   uint32_t* pd;
-
+  cur->pcb->curr_as_child->is_exited = true;
+  sema_up(&cur->pcb->curr_as_child->wait_sema);
   /* If this thread does not have a PCB, don't worry */
   if (cur->pcb == NULL) {
     thread_exit();

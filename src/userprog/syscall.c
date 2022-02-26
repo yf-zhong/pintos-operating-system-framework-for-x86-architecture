@@ -62,7 +62,6 @@ void sys_exit(struct intr_frame* f, int status) {
     decrement_children_ref_cnt(pcb);
     decrement_ref_cnt(pcb->curr_as_child);
     pcb->curr_as_child->exit_status = status;
-    pcb->curr_as_child->is_exited = true;
     sema_up(&pcb->curr_as_child->wait_sema);
     process_exit();
 }
