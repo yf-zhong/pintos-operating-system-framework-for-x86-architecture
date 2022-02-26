@@ -66,6 +66,10 @@ void sys_exit(struct intr_frame* f, int status) {
     process_exit();
 }
 
+// void file_create(struct intr_frame f, const char* file, unsigned initial_size) {
+  
+// }
+
 static void syscall_handler(struct intr_frame* f UNUSED) {
   uint32_t* args = ((uint32_t*)f->esp);
 
@@ -96,6 +100,34 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     case SYS_EXEC:
       break;
     case SYS_EXIT:
+      break;
+    /* File operations */
+    case SYS_CREATE:
+      file_create(f, args[1], args[2]);  /* Working On */
+      break;
+    case SYS_REMOVE:
+      file_remove(f, args[1]);  /* Pending */
+      break;
+    case SYS_OPEN:
+      file_open(f, args[1]);    /* Pending */
+      break;
+    case SYS_FILESIZE:
+      file_filesize(f, args[1]);/* Pending */
+      break;
+    case SYS_READ:
+      file_read(f, args[1]);    /* Pending */
+      break;
+    case SYS_WRITE:
+      file_write(f, args[1]);   /* Pending */
+      break;
+    case SYS_SEEK:
+      file_seek(f, args[1]);    /* Pending */
+      break;
+    case SYS_TELL:
+      file_tell(f, args[1]);    /* Pending */
+      break;
+    case SYS_CLOSE:
+      file_close(f, args[1]);   /* Pending */
       break;
   }
 }
