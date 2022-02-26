@@ -90,7 +90,7 @@ static void start_process(void* file_name_) {
     t->pcb->main_thread = t;
     strlcpy(t->pcb->process_name, t->name, sizeof t->name);
   }
-
+ 
   /* Initialize interrupt frame and load executable. */
   if (success) {
     memset(&if_, 0, sizeof if_);
@@ -262,6 +262,75 @@ static bool validate_segment(const struct Elf32_Phdr*, struct file*);
 static bool load_segment(struct file* file, off_t ofs, uint8_t* upage, uint32_t read_bytes,
                          uint32_t zero_bytes, bool writable);
 
+int count_args(const char*);
+void push_stack(void**, void*, size_t);
+void add_args(const char*, void**);
+
+int count_args(const char* file_name) {
+  int count = 0;
+  for (int i = 1; file_name[i] != '\0'; i++) {
+    if (file_name[i] == ' ' && file_name[i - 1] != ' ') {
+      count++;
+    }
+  }
+  return count + 1;
+}
+
+void push_stack(void** esp, void* src, size_t size) {
+  *esp -= size;
+  memcpy(*esp, src, size);
+  return;
+}
+
+void add_args(const char* file_name, void** esp) {
+  char* file_name_cpy = (char*) malloc(sizeof(char) * (strlen(file_name) + 1));
+  char* file_name_cpy_base = file_name_cpy;
+  int nArgs = count_args(file_name_cpy);
+  char** args = (char**) malloc(sizeof(char*) * nArgs);
+  char* arg;
+  int argIndex = 0;
+  unsigned int allByteCount = sizeof(char*) * (nArgs + 1) + sizeof(char**) + sizeof(int);
+  strlcpy(file_name_cpy, file_name, strlen(file_name) + 1);
+  // get all arguments in file_name_cpy
+  char** saveptr = &file_name_cpy;
+  arg = strtok_r(file_name_cpy, " ", saveptr);
+  while (arg != (char*) NULL) {
+    args[argIndex] = arg;
+    argIndex++;
+    arg = strtok_r((char*) NULL, " ", saveptr);
+  }
+  // push all arguments onto user stack, record the location of each arg on the stack
+  // accumulate the used bytes on stack
+  int argByteCount = 0;
+  char** argsAddrInStack = (char**) malloc(sizeof(char*) * nArgs + 1);
+  for (argIndex = nArgs - 1; argIndex >= 0; argIndex--) {
+    arg = args[argIndex];
+    argByteCount = sizeof(char) * (strlen(arg) + 1);
+    allByteCount += argByteCount;
+    push_stack(esp, arg, argByteCount);
+    argsAddrInStack[argIndex] = (char*) *esp;
+  }
+  // push stack-aglin onto user stack
+  argByteCount = sizeof(uint8_t) * ((0b10000 - (allByteCount & 0b1111)) & 0b1111);
+  uint8_t *arg_zeros = calloc(argByteCount / sizeof(uint8_t), sizeof(uint8_t));
+  push_stack(esp, arg_zeros, sizeof(uint8_t) * argByteCount);
+  free(arg_zeros);
+  // push NULL ptr after stack-aglin by convention
+  char* null_ptr = (char*) NULL;
+  push_stack(esp, &null_ptr, sizeof(char*));
+  // push all pointers to argument onto the user stack
+  push_stack(esp, argsAddrInStack, sizeof(char*) * nArgs);
+  // push argv onto stack
+  char** argv_0 = *esp;
+  push_stack(esp, &argv_0, sizeof(char**));
+  // push argc
+  push_stack(esp, &nArgs, sizeof(int));
+  free(args);
+  free(argsAddrInStack);
+  free(file_name_cpy_base);
+  return;
+}
+
 /* Loads an ELF executable from FILE_NAME into the current thread.
    Stores the executable's entry point into *EIP
    and its initial stack pointer into *ESP.
@@ -353,6 +422,9 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   *eip = (void (*)(void))ehdr.e_entry;
 
   success = true;
+
+  add_args(file_name, esp);
+  *esp -= sizeof(void*); // fake return address
 
 done:
   /* We arrive here whether the load is successful or not. */
