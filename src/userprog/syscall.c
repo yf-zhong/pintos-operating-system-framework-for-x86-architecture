@@ -46,13 +46,24 @@ void sys_exec(struct intr_frame* f, const char* cmd_line) {
   if (is_valid_char_ptr(cmd_line)) {
     sys_exit(f, -1);
   }
-  return process_execute(cmd_line);
+  f->eax = process_execute(cmd_line);
+  return;
 }
 
+void sys_wait(struct intr_frame* f, pid_t pid) {
+  f->eax = process_wait(pid);
+  return;
+}
 
 void sys_exit(struct intr_frame* f, int status) {
     f->eax = status;
     printf("%s: exit(%d)\n", thread_current()->pcb->process_name, status);
+    struct process* pcb = thread_current()->pcb;
+    decrement_children_ref_cnt(pcb);
+    decrement_ref_cnt(pcb->curr_as_child);
+    pcb->curr_as_child->exit_status = status;
+    pcb->curr_as_child->is_exited = true;
+    sema_up(&pcb->curr_as_child->wait_sema);
     process_exit();
 }
 

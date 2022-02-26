@@ -24,10 +24,8 @@ static struct semaphore temporary;
 static thread_func start_process NO_RETURN;
 static bool load(const char* file_name, void (**eip)(void), void** esp);
 CHILD* new_child(void);
-void exit_proc_child_setup(CHILD*);
 void t_pcb_init(struct thread*, struct process*, CHILD*);
-void decrement_ref_cnt(CHILD*);
-void decrement_children_ref_cnt(struct process*);
+CHILD* find_child(pid_t);
 
 /* Initializes user programs in the system by ensuring the main
    thread has a minimal PCB so that it can execute and wait for
@@ -181,6 +179,19 @@ static void start_process(void* spaptr_) {
   NOT_REACHED();
 }
 
+CHILD* find_child(pid_t pid) {
+  struct list* children = thread_current()->pcb->children;
+  CHILD* cptr;
+  for (struct list_elem *e = list_begin(&children); e != list_end(&children);
+      e = list_next(e)) {
+    cptr = list_entry(e, CHILD, elem);
+    if (cptr->pid == pid) {
+      return cptr;
+    }
+  }
+  return NULL;
+}
+
 /* Waits for process with PID child_pid to die and returns its exit status.
    If it was terminated by the kernel (i.e. killed due to an
    exception), returns -1.  If child_pid is invalid or if it was not a
@@ -191,8 +202,16 @@ static void start_process(void* spaptr_) {
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int process_wait(pid_t child_pid UNUSED) {
-  sema_down(&temporary);
-  return 0;
+  CHILD* child_to_wait = find_child(child_pid);
+  if (child_to_wait == NULL || child_to_wait->is_waiting) {
+    return ERROR;
+  }
+  child_to_wait->is_waiting = true;
+  sema_down(&child_to_wait->wait_sema);
+  if (child_to_wait->is_exited) {
+    return child_to_wait->exit_status;
+  }
+
 }
 
 void decrement_ref_cnt(CHILD* cptr) {
@@ -211,8 +230,6 @@ void decrement_ref_cnt(CHILD* cptr) {
 void decrement_children_ref_cnt(struct process* pcb) {
   struct list_elem *e = list_begin(&pcb->children);
   struct list_elem *next_e;
-  struct list children_to_delete;
-  list_init(&children_to_delete);
   CHILD* cptr;
   while (e != list_end(&pcb->children)) {
     next_e = list_next(e);
@@ -255,8 +272,6 @@ void process_exit(void) {
      can try to activate the pagedir, but it is now freed memory */
   struct process* pcb_to_free = cur->pcb;
   cur->pcb = NULL;
-  decrement_children_ref_cnt(pcb_to_free);
-  decrement_ref_cnt(pcb_to_free->curr_as_child);
   free(pcb_to_free);
   sema_up(&temporary);
   thread_exit();
