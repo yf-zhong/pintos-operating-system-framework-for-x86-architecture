@@ -27,9 +27,9 @@ typedef struct child {
    int exit_status;
    bool is_exited;
    bool is_loaded;
-   bool is_waiting;  // need lock
+   bool is_waiting;
    int ref_cnt;      // need lock
-   struct lock lock;
+   struct lock ref_lock;
    struct list_elem elem; // need lock(?
 } CHILD;
 
@@ -44,7 +44,6 @@ struct process {
   char process_name[16];      /* Name of the main thread */
   struct thread* main_thread; /* Pointer to main thread */
   struct lock c_lock;
-  char for_testing[10];
   struct list children;
   struct child* curr_as_child;
 };

@@ -24,7 +24,10 @@ static struct semaphore temporary;
 static thread_func start_process NO_RETURN;
 static bool load(const char* file_name, void (**eip)(void), void** esp);
 CHILD* new_child(void);
+void exit_proc_child_setup(CHILD*);
 void t_pcb_init(struct thread*, struct process*, CHILD*);
+void decrement_ref_cnt(CHILD*);
+void decrement_children_ref_cnt(struct process*);
 
 /* Initializes user programs in the system by ensuring the main
    thread has a minimal PCB so that it can execute and wait for
@@ -48,7 +51,7 @@ void userprog_init(void) {
 }
 
 CHILD* new_child() {
-  CHILD* cptr = (CHILD*) malloc(sizeof(CHILD));
+  CHILD* cptr = (CHILD*) palloc_get_page(0);
   if (cptr == NULL) {
     return NULL;
   }
@@ -59,7 +62,7 @@ CHILD* new_child() {
   cptr->is_loaded = false;
   cptr->is_waiting = false;
   cptr->ref_cnt = 2;
-  lock_init(&cptr->lock);
+  lock_init(&cptr->ref_lock);
   return cptr;
 }
 
@@ -74,7 +77,7 @@ pid_t process_execute(const char* file_name) {
   sema_init(&temporary, 0);
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
-  spaptr = (SPA*) malloc(sizeof(SPA));
+  spaptr = (SPA*) palloc_get_page(0);
   if (spaptr == NULL)
     return TID_ERROR;
   spaptr->file_name = palloc_get_page(0);
@@ -90,15 +93,20 @@ pid_t process_execute(const char* file_name) {
   tid = thread_create(file_name, PRI_DEFAULT, start_process, spaptr);
   sema_down(&spaptr->new_c->exec_sema);
   if (!spaptr->new_c->is_loaded) {
-    free(spaptr->new_c);
+    spaptr->new_c->is_exited = true;
+    spaptr->new_c->exit_status = ERROR;    
   } 
-  else {
-    struct process* pcb = thread_current()->pcb;
-    list_push_front(&pcb->children, &spaptr->new_c->elem);
-  }
+  struct process* pcb = thread_current()->pcb;
+  spaptr->new_c->pid = tid;
+  lock_acquire(&pcb->c_lock);
+  list_push_front(&pcb->children, &spaptr->new_c->elem);
+  lock_release(&pcb->c_lock);
 
-  if (tid == TID_ERROR)
+  if (tid == TID_ERROR) {
+    palloc_free_page(spaptr->file_name);
+    palloc_free_page(spaptr->new_c);
     palloc_free_page(spaptr);
+  }
   return tid;
 }
 
@@ -107,8 +115,7 @@ void t_pcb_init(struct thread* t, struct process *new_pcb, CHILD *new_c) {
   t->pcb = new_pcb;
   t->pcb->main_thread = t;
   strlcpy(t->pcb->process_name, t->name, sizeof t->name);
-  // lock_init(&t->pcb->c_lock);
-  strlcpy(t->pcb->for_testing, "hello", sizeof(char) * 6);
+  lock_init(&t->pcb->c_lock);
   list_init(&t->pcb->children);
   t->pcb->curr_as_child = new_c;
 }
@@ -188,6 +195,33 @@ int process_wait(pid_t child_pid UNUSED) {
   return 0;
 }
 
+void decrement_ref_cnt(CHILD* cptr) {
+  lock_acquire(&cptr->ref_lock);
+  cptr->ref_cnt--;
+  if (cptr->ref_cnt == 0) {
+    palloc_free_page(cptr);
+    return;
+  }
+  else {
+    lock_release(&cptr->ref_lock);
+    return;
+  }
+}
+
+void decrement_children_ref_cnt(struct process* pcb) {
+  struct list_elem *e = list_begin(&pcb->children);
+  struct list_elem *next_e;
+  struct list children_to_delete;
+  list_init(&children_to_delete);
+  CHILD* cptr;
+  while (e != list_end(&pcb->children)) {
+    next_e = list_next(e);
+    cptr = list_entry(e, CHILD, elem);
+    decrement_ref_cnt(cptr);
+    e = next_e;
+  }
+}
+
 /* Free the current process's resources. */
 void process_exit(void) {
   struct thread* cur = thread_current();
@@ -221,8 +255,9 @@ void process_exit(void) {
      can try to activate the pagedir, but it is now freed memory */
   struct process* pcb_to_free = cur->pcb;
   cur->pcb = NULL;
+  decrement_children_ref_cnt(pcb_to_free);
+  decrement_ref_cnt(pcb_to_free->curr_as_child);
   free(pcb_to_free);
-
   sema_up(&temporary);
   thread_exit();
 }
