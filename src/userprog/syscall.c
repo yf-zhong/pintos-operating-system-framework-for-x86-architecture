@@ -18,6 +18,15 @@ void sys_exec(struct intr_frame*, const char*);
 void sys_wait(struct intr_frame*, pid_t);
 void sys_exit(struct intr_frame*, int);
 
+bool file_create(const char* file, unsigned initial_size);
+bool file_remove(const char* file);
+int file_open(const char* file);
+int file_filesize(int fd);
+int file_read(int fd, void* buffer, unsigned length);
+int file_write(int fd, const void* buffer, unsigned length);
+void file_seek(int fd, unsigned position);
+unsigned file_tell(int fd);
+void file_close(int fd);
 
 bool is_valid_char_ptr(const char* c) {
   uint32_t* pd = thread_current()->pcb->pagedir;
@@ -96,6 +105,24 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     case SYS_EXEC:
       break;
     case SYS_EXIT:
+      break;
+    case SYS_CREATE:
+      break;
+    case SYS_REMOVE:
+      break;
+    case SYS_OPEN:
+      break;
+    case SYS_FILESIZE:
+      break;
+    case SYS_READ:
+      break;
+    case SYS_WRITE:
+      break;
+    case SYS_SEEK:
+      break;
+    case SYS_TELL:
+      break;
+    case SYS_CLOSE:
       break;
   }
 }
