@@ -47,7 +47,7 @@ void sys_exec(struct intr_frame* f, const char* cmd_line) {
     f->eax = process_execute(cmd_line);
   }
   else {
-    f->eax = ERROR;
+    sys_exit(f, -1);
   }
   return;
 }
@@ -79,18 +79,30 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
   switch(args[0]) {
     case SYS_PRACTICE:
+      if ((sizeof(int) - 1) & (unsigned long) &args[1]) {
+        sys_exit(f, -1);
+      }
       sys_practice(f, args[1]);
       break;
     case SYS_HALT:
       sys_halt();
       break;
     case SYS_WAIT:
+      if ((sizeof(pid_t) - 1) & (unsigned long) &args[1]) {
+        sys_exit(f, -1);
+      }
       sys_wait(f, args[1]);
       break;
     case SYS_EXEC:
+      if ((sizeof(char*) - 1) & (unsigned long) &args[1]) {
+        sys_exit(f, -1);
+      }
       sys_exec(f, (char*) args[1]);
       break;
     case SYS_EXIT:
+      if ((sizeof(int) - 1) & (unsigned long) &args[1]) {
+        sys_exit(f, -1);
+      }
       sys_exit(f, args[1]);
       break;
   }
