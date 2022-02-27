@@ -15,4 +15,8 @@ void sys_seek(struct intr_frame*, int, unsigned);
 void sys_tell(struct intr_frame*, int);
 void sys_close(struct intr_frame*, int);
 
+/* Iterater through file descriptor table to find fd. */
+struct file* to_file_ptr(int);
+
+
 #endif /* userprog/syscall.h */

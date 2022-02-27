@@ -266,27 +266,32 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
           sys_exit(f, -1);
       }
     //   sys_remove(f, args[1]);  /* Pending */
+    //   use filesys_remove(const char *name)
       break;
     case SYS_OPEN:
       if ((sizeof(char*) - 1) & (unsigned long) &args[1]) {
           sys_exit(f, -1);
       }
     //   sys_open(f, args[1]);    /* Pending */
+    //   use filesys_open(const char *name)
       break;
     case SYS_FILESIZE:
     //   sys_filesize(f, args[1]);/* Pending */
+    //   use file_length(struct file*)
       break;
     case SYS_READ:
       if ((sizeof(void*) - 1) & (unsigned long) &args[2]) {
           sys_exit(f, -1);
       }
     //   sys_read(f, args[1]);    /* Pending */
+    //   use file_read(struct file*, void *, off_t)
       break;
     case SYS_WRITE:
       if ((sizeof(void*) - 1) & (unsigned long) &args[2]) {
           sys_exit(f, -1);
       }
       sys_write(f, args[1], (const void*) args[2], args[3]);   /* Revision needed */
+    //   use file_write()
       break;
     case SYS_SEEK:
       sys_seek(f, args[1], args[2]);
@@ -300,4 +305,17 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     default:
       f->eax = -3; /* If the NUMBER is not defined */
   }
+}
+
+/* Iterate through file descriptor table to find fd. */
+struct file* to_file_ptr(int fd) {
+  struct process* pcb = thread_current()->pcb;
+  struct list_elem *e;
+  for (e = list_begin(&(pcb->file_descriptor_table)); e != list_end(&(pcb->file_descriptor_table)); e = list_next(e)) {
+    struct file_descriptor *descriptor = list_entry(e, struct file_descriptor, elem);
+    if (descriptor->fd == fd) {
+      return descriptor->file;
+    }
+  }
+  return NULL;
 }
