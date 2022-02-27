@@ -398,7 +398,7 @@ void args_split(char* file_name, char* argv[]) {
 
 void args_load(const char* file_name, void** esp) {
   char* file_name_cpy = (char*) malloc(sizeof(char) * (strlen(file_name) + 1));
-  int nArgs = count_args(file_name_cpy);
+  int nArgs = count_args(file_name);
   char** args = (char**) malloc(sizeof(char*) * nArgs);
   unsigned int allByteCount = sizeof(char*) * (nArgs + 1) + sizeof(char**) + sizeof(int);
   strlcpy(file_name_cpy, file_name, strlen(file_name) + 1);
@@ -456,7 +456,13 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   process_activate();
 
   /* Open executable file. */
-  file = filesys_open(file_name);
+  char* file_name_cpy = (char*) malloc(sizeof(char) * (strlen(file_name) + 1));
+  char* cpy_base = file_name_cpy;
+  strlcpy(file_name_cpy, file_name, strlen(file_name) + 1);
+  char** saveptr = &file_name_cpy;
+  char* prog_name = strtok_r(file_name_cpy, " ", saveptr);
+  file = filesys_open(prog_name);
+  free(cpy_base);
   if (file == NULL) {
     printf("load: %s: open failed\n", file_name);
     goto done;
