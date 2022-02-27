@@ -26,7 +26,6 @@ typedef struct child {
    struct semaphore wait_sema;
    int exit_status;
    bool is_exited;
-   bool is_loaded;
    bool is_waiting;
    int ref_cnt;      // need lock
    struct lock ref_lock;
@@ -46,6 +45,18 @@ struct process {
   struct lock c_lock;
   struct list children;
   struct child* curr_as_child;
+  int cur_fd;                 /* The fd number assigned to new file */
+//   struct lock file_sys_lock;  /* Lock for the file system operation, in syscall.h now */
+  struct list file_descriptor_table; /* All the files opened in current process */
+};
+
+/* One element in the file descriptor table */
+struct file_descriptor {
+   int fd;                   /* File descriptor */
+   struct file *file;        /* File descriptor */
+   int ref_cnt;              /* Number of processes currently using the file */
+   struct lock ref_cnt_lock; /* Protect reference count per file */
+   struct list_elem elem;
 };
 
 // NEW_c has to come first so that 
@@ -61,8 +72,6 @@ pid_t process_execute(const char* file_name);
 int process_wait(pid_t);
 void process_exit(void);
 void process_activate(void);
-void decrement_ref_cnt(CHILD*);
-void decrement_children_ref_cnt(struct process*);
 
 bool is_main_thread(struct thread*, struct process*);
 pid_t get_pid(struct process*);
