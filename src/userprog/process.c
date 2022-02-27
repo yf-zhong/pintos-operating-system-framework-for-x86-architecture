@@ -26,6 +26,10 @@ static bool load(const char* file_name, void (**eip)(void), void** esp);
 CHILD* new_child(void);
 void t_pcb_init(struct thread*, struct process*, CHILD*);
 CHILD* find_child(pid_t);
+void decrement_ref_cnt(CHILD*);
+void decrement_children_ref_cnt(struct process*);
+void exit_setup(struct process*);
+void free_spa(SPA*);
 
 /* Initializes user programs in the system by ensuring the main
    thread has a minimal PCB so that it can execute and wait for
@@ -57,11 +61,16 @@ CHILD* new_child() {
   sema_init(&cptr->wait_sema, 0);
   cptr-> exit_status = ERROR;
   cptr->is_exited = false;
-  cptr->is_loaded = false;
   cptr->is_waiting = false;
   cptr->ref_cnt = 2;
   lock_init(&cptr->ref_lock);
   return cptr;
+}
+
+void free_spa(SPA* spaptr) {
+  palloc_free_page(spaptr->file_name);
+  palloc_free_page(spaptr->new_c);
+  palloc_free_page(spaptr);
 }
 
 /* Starts a new thread running a user program loaded from
@@ -85,25 +94,24 @@ pid_t process_execute(const char* file_name) {
   }
   strlcpy(spaptr->file_name, file_name, PGSIZE - sizeof(spaptr->new_c));
   
+  char* file_name_cpy = (char*) malloc(sizeof(char) * (strlen(file_name) + 1));
+  char* cpy_base = file_name_cpy;
+  strlcpy(file_name_cpy, file_name, strlen(file_name) + 1);
+  char** saveptr = &file_name_cpy;
+  char* prog_name = strtok_r(file_name_cpy, " ", saveptr);
 
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create(file_name, PRI_DEFAULT, start_process, spaptr);
+  tid = thread_create(prog_name, PRI_DEFAULT, start_process, spaptr);
   sema_down(&spaptr->new_c->exec_sema);
-  if (!spaptr->new_c->is_loaded) {
-    spaptr->new_c->is_exited = true;
-    spaptr->new_c->exit_status = ERROR;    
-  } 
+  free(cpy_base);
   struct process* pcb = thread_current()->pcb;
-  spaptr->new_c->pid = tid;
   lock_acquire(&pcb->c_lock);
   list_push_front(&pcb->children, &spaptr->new_c->elem);
   lock_release(&pcb->c_lock);
 
   if (tid == TID_ERROR) {
-    palloc_free_page(spaptr->file_name);
-    palloc_free_page(spaptr->new_c);
-    palloc_free_page(spaptr);
+    free_spa(spaptr);
   }
   return tid;
 }
@@ -116,6 +124,9 @@ void t_pcb_init(struct thread* t, struct process *new_pcb, CHILD *new_c) {
   lock_init(&t->pcb->c_lock);
   list_init(&t->pcb->children);
   t->pcb->curr_as_child = new_c;
+  if (new_c) {
+    new_c->pid = get_pid(new_pcb);
+  }
 }
 
 /* A thread function that loads a user process and starts it
@@ -146,7 +157,6 @@ static void start_process(void* spaptr_) {
     if_.cs = SEL_UCSEG;
     if_.eflags = FLAG_IF | FLAG_MBS;
     success = load(file_name, &if_.eip, &if_.esp);
-    new_c->is_loaded = true;
   }
 
   /* Handle failure with succesful PCB malloc. Must free the PCB */
@@ -155,15 +165,15 @@ static void start_process(void* spaptr_) {
     // If this happens, then an unfortuantely timed timer interrupt
     // can try to activate the pagedir, but it is now freed memory
     struct process* pcb_to_free = t->pcb;
-    new_c->is_loaded = false;
-    new_c->ref_cnt--;
+    new_c->exit_status = ERROR;
+    exit_setup(pcb_to_free);
     t->pcb = NULL;
     free(pcb_to_free);
   }
   sema_up(&new_c->exec_sema);
 
   /* Clean up. Exit on failure or jump to userspace */
-  palloc_free_page(file_name);
+  palloc_free_page(spaptr->file_name);
   if (!success) {
     sema_up(&temporary);
     thread_exit();
@@ -239,12 +249,17 @@ void decrement_children_ref_cnt(struct process* pcb) {
   }
 }
 
+void exit_setup(struct process* pcb_to_free) {
+  pcb_to_free->curr_as_child->is_exited = true;
+  decrement_children_ref_cnt(pcb_to_free);
+  decrement_ref_cnt(pcb_to_free->curr_as_child);
+  sema_up(&pcb_to_free->curr_as_child->wait_sema);
+}
+
 /* Free the current process's resources. */
 void process_exit(void) {
   struct thread* cur = thread_current();
   uint32_t* pd;
-  cur->pcb->curr_as_child->is_exited = true;
-  sema_up(&cur->pcb->curr_as_child->wait_sema);
   /* If this thread does not have a PCB, don't worry */
   if (cur->pcb == NULL) {
     thread_exit();
@@ -273,6 +288,7 @@ void process_exit(void) {
      can try to activate the pagedir, but it is now freed memory */
   struct process* pcb_to_free = cur->pcb;
   cur->pcb = NULL;
+  exit_setup(pcb_to_free);
   free(pcb_to_free);
   sema_up(&temporary);
   thread_exit();
@@ -362,7 +378,8 @@ static bool load_segment(struct file* file, off_t ofs, uint8_t* upage, uint32_t 
 
 int count_args(const char*);
 void push_stack(void**, void*, size_t);
-void add_args(const char*, void**);
+void args_load(const char*, void**);
+void args_split(char*, char**);
 
 int count_args(const char* file_name) {
   int count = 0;
@@ -380,28 +397,30 @@ void push_stack(void** esp, void* src, size_t size) {
   return;
 }
 
-void add_args(const char* file_name, void** esp) {
+void args_split(char* file_name, char* argv[]) {
+  char** saveptr = &file_name;
+  char* arg = strtok_r(file_name, " ", saveptr);
+  for(int i = 0; arg != (char*) NULL; i++) {
+    argv[i] = arg;
+    arg = strtok_r((char*) NULL, " ", saveptr);
+  }
+  return;
+}
+
+void args_load(const char* file_name, void** esp) {
   char* file_name_cpy = (char*) malloc(sizeof(char) * (strlen(file_name) + 1));
-  char* file_name_cpy_base = file_name_cpy;
-  int nArgs = count_args(file_name_cpy);
+  int nArgs = count_args(file_name);
   char** args = (char**) malloc(sizeof(char*) * nArgs);
-  char* arg;
-  int argIndex = 0;
   unsigned int allByteCount = sizeof(char*) * (nArgs + 1) + sizeof(char**) + sizeof(int);
   strlcpy(file_name_cpy, file_name, strlen(file_name) + 1);
   // get all arguments in file_name_cpy
-  char** saveptr = &file_name_cpy;
-  arg = strtok_r(file_name_cpy, " ", saveptr);
-  while (arg != (char*) NULL) {
-    args[argIndex] = arg;
-    argIndex++;
-    arg = strtok_r((char*) NULL, " ", saveptr);
-  }
+  args_split(file_name_cpy, args);
   // push all arguments onto user stack, record the location of each arg on the stack
   // accumulate the used bytes on stack
   int argByteCount = 0;
   char** argsAddrInStack = (char**) malloc(sizeof(char*) * nArgs + 1);
-  for (argIndex = nArgs - 1; argIndex >= 0; argIndex--) {
+  char* arg;
+  for (int argIndex = nArgs - 1; argIndex >= 0; argIndex--) {
     arg = args[argIndex];
     argByteCount = sizeof(char) * (strlen(arg) + 1);
     allByteCount += argByteCount;
@@ -425,7 +444,7 @@ void add_args(const char* file_name, void** esp) {
   push_stack(esp, &nArgs, sizeof(int));
   free(args);
   free(argsAddrInStack);
-  free(file_name_cpy_base);
+  free(file_name_cpy);
   return;
 }
 
@@ -448,7 +467,13 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   process_activate();
 
   /* Open executable file. */
-  file = filesys_open(file_name);
+  char* file_name_cpy = (char*) malloc(sizeof(char) * (strlen(file_name) + 1));
+  char* cpy_base = file_name_cpy;
+  strlcpy(file_name_cpy, file_name, strlen(file_name) + 1);
+  char** saveptr = &file_name_cpy;
+  char* prog_name = strtok_r(file_name_cpy, " ", saveptr);
+  file = filesys_open(prog_name);
+  free(cpy_base);
   if (file == NULL) {
     printf("load: %s: open failed\n", file_name);
     goto done;
@@ -521,7 +546,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
 
   success = true;
 
-  add_args(file_name, esp);
+  args_load(file_name, esp);
   *esp -= sizeof(void*); // fake return address
 
 done:
