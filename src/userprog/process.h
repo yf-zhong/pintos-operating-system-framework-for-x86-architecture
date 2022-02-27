@@ -26,7 +26,6 @@ typedef struct child {
    struct semaphore wait_sema;
    int exit_status;
    bool is_exited;
-   bool is_loaded;
    bool is_waiting;
    int ref_cnt;      // need lock
    struct lock ref_lock;

@@ -60,7 +60,6 @@ CHILD* new_child() {
   sema_init(&cptr->wait_sema, 0);
   cptr-> exit_status = ERROR;
   cptr->is_exited = false;
-  cptr->is_loaded = false;
   cptr->is_waiting = false;
   cptr->ref_cnt = 2;
   lock_init(&cptr->ref_lock);
@@ -93,12 +92,7 @@ pid_t process_execute(const char* file_name) {
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create(file_name, PRI_DEFAULT, start_process, spaptr);
   sema_down(&spaptr->new_c->exec_sema);
-  if (!spaptr->new_c->is_loaded) {
-    spaptr->new_c->exit_status = ERROR;
-    spaptr->new_c->is_exited = true;
-  } 
   struct process* pcb = thread_current()->pcb;
-  spaptr->new_c->pid = tid;
   lock_acquire(&pcb->c_lock);
   list_push_front(&pcb->children, &spaptr->new_c->elem);
   lock_release(&pcb->c_lock);
@@ -119,6 +113,9 @@ void t_pcb_init(struct thread* t, struct process *new_pcb, CHILD *new_c) {
   lock_init(&t->pcb->c_lock);
   list_init(&t->pcb->children);
   t->pcb->curr_as_child = new_c;
+  if (new_c) {
+    new_c->pid = get_pid(new_pcb);
+  }
 }
 
 /* A thread function that loads a user process and starts it
@@ -149,7 +146,6 @@ static void start_process(void* spaptr_) {
     if_.cs = SEL_UCSEG;
     if_.eflags = FLAG_IF | FLAG_MBS;
     success = load(file_name, &if_.eip, &if_.esp);
-    new_c->is_loaded = true;
   }
 
   /* Handle failure with succesful PCB malloc. Must free the PCB */
@@ -158,7 +154,6 @@ static void start_process(void* spaptr_) {
     // If this happens, then an unfortuantely timed timer interrupt
     // can try to activate the pagedir, but it is now freed memory
     struct process* pcb_to_free = t->pcb;
-    new_c->is_loaded = false;
     new_c->exit_status = ERROR;
     exit_setup(pcb_to_free);
     t->pcb = NULL;
