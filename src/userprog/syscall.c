@@ -19,7 +19,6 @@ void sys_halt(void);
 void sys_exec(struct intr_frame*, const char*);
 void sys_wait(struct intr_frame*, pid_t);
 void sys_exit(struct intr_frame*, int);
-void sys_write(struct intr_frame*, int, const void*, unsigned);
 
 bool is_valid_char_ptr(const char* c) {
   uint32_t* pd = thread_current()->pcb->pagedir;
@@ -32,7 +31,10 @@ bool is_valid_char_ptr(const char* c) {
   return false;
 }
 
-void syscall_init(void) { intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall"); }
+void syscall_init(void) {
+  intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
+  lock_init(&file_sys_lock); /* Init the lock for file syscall */
+}
 
 void sys_practice(struct intr_frame* f, int i) {
   f->eax = i + 1;
@@ -67,22 +69,19 @@ void sys_exit(struct intr_frame* f, int status) {
     process_exit();
 }
 
-// void sys_create(struct intr_frame* f, const char* file, unsigned initial_size) {
-//   /* Get current user program pcb */
-//   /* Argument validation */
-//   if (is_valid_char_ptr(file)) {
-//     sys_exit(f, -1);
-//   }
-//   struct process* pcb = thread_current()->pcb;
-//   bool flag;
-//   /* Lock required */
-//   lock_acquire(&file_sys_lock);
-//   flag = filesys_create(file, initial_size);
-//   /* Lock release required */
-//   lock_release(&file_sys_lock);
-//   f->eax = flag;
-//   return;
-// }
+void sys_create(struct intr_frame* f, const char* file, unsigned initial_size) {  
+  /* Todo: Argument validation */
+
+  /* Get current user program pcb */
+  bool flag;
+  /* Lock required */
+  lock_acquire(&file_sys_lock);
+  flag = filesys_create(file, initial_size);
+  /* Lock release required */
+  lock_release(&file_sys_lock);
+  f->eax = flag;
+  return;
+}
 
 // void sys_remove(struct intr_frame* f, const char* file) {return;}
 
@@ -95,9 +94,8 @@ void sys_exit(struct intr_frame* f, int status) {
 void sys_write(struct intr_frame* f, int fd, const void* buffer, unsigned size) {
   if (fd == 1) {
     putbuf(buffer, size);
-  } else if (fd == 2) {
-    /* Need rewrite here */
-    // process_exit();
+  } else if (fd == 2 || fd == 0) {
+    /* TODO: May need revise */
     f->eax = -1;
   } else {
     int bytes_read;
@@ -166,33 +164,34 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       sys_exit(f, args[1]);
       break;
     /* File operations */
-    // case SYS_CREATE:
-    //   sys_create(f, args[1], args[2]);  /* Working On */
-    //   break;
-    // case SYS_REMOVE:
-    //   sys_remove(f, args[1]);  /* Pending */
-    //   break;
-    // case SYS_OPEN:
-    //   sys_open(f, args[1]);    /* Pending */
-    //   break;
-    // case SYS_FILESIZE:
-    //   sys_filesize(f, args[1]);/* Pending */
-    //   break;
-    // case SYS_READ:
-    //   sys_read(f, args[1]);    /* Pending */
-    //   break;
-    case SYS_WRITE:
-      // int *fd = args[2];
-      sys_write(f, args[1], args[2], args[3]);   /* Pending */
+    case SYS_CREATE:
+      sys_create(f, (const char*) args[1], args[2]);  /* Working On */
       break;
-    // case SYS_SEEK:
+    case SYS_REMOVE:
+    //   sys_remove(f, args[1]);  /* Pending */
+      break;
+    case SYS_OPEN:
+    //   sys_open(f, args[1]);    /* Pending */
+      break;
+    case SYS_FILESIZE:
+    //   sys_filesize(f, args[1]);/* Pending */
+      break;
+    case SYS_READ:
+    //   sys_read(f, args[1]);    /* Pending */
+      break;
+    case SYS_WRITE:
+      sys_write(f, args[1], (const void*) args[2], args[3]);   /* Revision needed */
+      break;
+    case SYS_SEEK:
     //   sys_seek(f, args[1]);    /* Pending */
-    //   break;
-    // case SYS_TELL:
+      break;
+    case SYS_TELL:
     //   sys_tell(f, args[1]);    /* Pending */
-    //   break;
-    // case SYS_CLOSE:
+      break;
+    case SYS_CLOSE:
     //   sys_close(f, args[1]);   /* Pending */
-    //   break;
+      break;
+    default:
+      f->eax = -3; /* If the NUMBER is not defined */
   }
 }
