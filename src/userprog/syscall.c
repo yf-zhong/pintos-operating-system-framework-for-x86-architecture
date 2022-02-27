@@ -21,7 +21,7 @@ void sys_exit(struct intr_frame*, int);
 
 bool is_valid_char_ptr(const char* c) {
   uint32_t* pd = thread_current()->pcb->pagedir;
-  while (is_user_vaddr(c) && pagedir_get_page(pd, pg_round_down(c))) {
+  while (is_user_vaddr(c) && pagedir_get_page(pd, c)) {
     if (*c == '\0') {
       return true;
     }
