@@ -44,9 +44,11 @@ void sys_halt() {
 void sys_exec(struct intr_frame* f, const char* cmd_line) {
   // check if cmd_line valid
   if (is_valid_char_ptr(cmd_line)) {
-    sys_exit(f, -1);
+    f->eax = process_execute(cmd_line);
   }
-  f->eax = process_execute(cmd_line);
+  else {
+    f->eax = ERROR;
+  }
   return;
 }
 
@@ -59,8 +61,6 @@ void sys_exit(struct intr_frame* f, int status) {
     f->eax = status;
     printf("%s: exit(%d)\n", thread_current()->pcb->process_name, status);
     struct process* pcb = thread_current()->pcb;
-    decrement_children_ref_cnt(pcb);
-    decrement_ref_cnt(pcb->curr_as_child);
     pcb->curr_as_child->exit_status = status;
     process_exit();
 }
@@ -88,7 +88,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       sys_wait(f, args[1]);
       break;
     case SYS_EXEC:
-      sys_exec(f, args[1]);
+      sys_exec(f, (char*) args[1]);
       break;
     case SYS_EXIT:
       sys_exit(f, args[1]);
