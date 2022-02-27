@@ -8,6 +8,8 @@
 #include "threads/loader.h"
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
+#include "filesys/file.h"
+#include "filesys/filesys.h"
 
 static void syscall_handler(struct intr_frame*);
 
@@ -18,15 +20,15 @@ void sys_exec(struct intr_frame*, const char*);
 void sys_wait(struct intr_frame*, pid_t);
 void sys_exit(struct intr_frame*, int);
 
-bool file_create(const char* file, unsigned initial_size);
-bool file_remove(const char* file);
-int file_open(const char* file);
-int file_filesize(int fd);
-int file_read(int fd, void* buffer, unsigned length);
-int file_write(int fd, const void* buffer, unsigned length);
-void file_seek(int fd, unsigned position);
-unsigned file_tell(int fd);
-void file_close(int fd);
+bool file_create(struct intr_frame*, const char*, unsigned);
+bool file_remove(struct intr_frame*, const char*);
+int file_open(struct intr_frame*, const char*);
+int file_filesize(struct intr_frame*, int);
+int file_read(struct intr_frame*, int, void*, unsigned);
+int file_write(struct intr_frame*, int, const void*, unsigned);
+void file_seek(struct intr_frame*, int, unsigned);
+unsigned file_tell(struct intr_frame*, int);
+void file_close(struct intr_frame*, int);
 
 bool is_valid_char_ptr(const char* c) {
   uint32_t* pd = thread_current()->pcb->pagedir;
@@ -37,6 +39,11 @@ bool is_valid_char_ptr(const char* c) {
     c++;
   }
   return false;
+}
+
+bool is_valid_args(const void* c) {
+  uint32_t* pd = thread_current()->pcb->pagedir;
+  return is_user_vaddr(c) && pagedir_get_page(pd, c);
 }
 
 void syscall_init(void) { intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall"); }
@@ -79,6 +86,26 @@ void sys_exit(struct intr_frame* f, int status) {
   
 // }
 
+int file_read(struct intr_frame* f, int fd, void* buffer, unsigned length) {
+
+}
+
+int file_write(struct intr_frame* f, int fd, const void* buffer, unsigned length) {
+
+}
+
+void file_seek(struct intr_frame* f, int fd, unsigned position) {
+
+}
+
+unsigned file_tell(struct intr_frame* f, int fd) {
+
+}
+
+void file_close(struct intr_frame* f, int fd) {
+
+}
+
 static void syscall_handler(struct intr_frame* f UNUSED) {
   uint32_t* args = ((uint32_t*)f->esp);
 
@@ -89,12 +116,23 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
    * include it in your final submission.
    */
 
-  /* printf("System call number: %d\n", args[0]); */
-
-  if (args[0] == SYS_EXIT) {
-    f->eax = args[1];
-    printf("%s: exit(%d)\n", thread_current()->pcb->process_name, args[1]);
-    process_exit();
+  int num_args = 0;
+  switch(args[0]) {
+    case SYS_WRITE: case SYS_READ:
+      num_args = 3;
+      break;
+    case SYS_CREATE: case SYS_SEEK:
+      num_args = 2;
+      break;
+    default:
+      num_args = 1;
+      break;
+  }
+  for (int i = 1; i <= num_args; i++) {
+    if (!is_valid_args(args[i])) {
+      printf("%d is not in userspace.", args[i]);
+      process_exit();
+    }
   }
 
   switch(args[0]) {
@@ -110,25 +148,6 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       break;
     case SYS_EXIT:
       break;
-<<<<<<< HEAD
-    case SYS_CREATE:
-      break;
-    case SYS_REMOVE:
-      break;
-    case SYS_OPEN:
-      break;
-    case SYS_FILESIZE:
-      break;
-    case SYS_READ:
-      break;
-    case SYS_WRITE:
-      break;
-    case SYS_SEEK:
-      break;
-    case SYS_TELL:
-      break;
-    case SYS_CLOSE:
-=======
     /* File operations */
     case SYS_CREATE:
       file_create(f, args[1], args[2]);  /* Working On */
@@ -143,20 +162,19 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       file_filesize(f, args[1]);/* Pending */
       break;
     case SYS_READ:
-      file_read(f, args[1]);    /* Pending */
+      file_read(f, args[1], args[2], args[3]);    /* Pending */
       break;
     case SYS_WRITE:
-      file_write(f, args[1]);   /* Pending */
+      file_write(f, args[1], args[2], args[3]);   /* Pending */
       break;
     case SYS_SEEK:
-      file_seek(f, args[1]);    /* Pending */
+      file_seek(f, args[1], args[2]);    /* Pending */
       break;
     case SYS_TELL:
       file_tell(f, args[1]);    /* Pending */
       break;
     case SYS_CLOSE:
       file_close(f, args[1]);   /* Pending */
->>>>>>> 866821383f78c0f4cb9885a960e828b6cef984ff
       break;
   }
 }
