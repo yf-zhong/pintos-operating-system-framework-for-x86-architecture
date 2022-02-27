@@ -42,19 +42,17 @@ bool is_valid_str(const char* c) {
   return false;
 }
 
-struct file* to_file_ptr(int fd) {
+struct file_descriptor* find_file_des(int fd) {
   struct process* pcb = thread_current()->pcb;
   struct list_elem *e;
   for (e = list_begin(&(pcb->file_descriptor_table)); e != list_end(&(pcb->file_descriptor_table)); e = list_next(e)) {
-    struct file_descriptor *descriptor = list_entry(e, struct file_descriptor, elem);
+    struct file_descriptor* descriptor = list_entry(e, struct file_descriptor, elem);
     if (descriptor->fd == fd) {
-      return descriptor->file;
+      return descriptor;
     }
   }
   return NULL;
 }
-
-
 
 void syscall_init(void) {
   intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
@@ -96,7 +94,7 @@ void sys_exit(struct intr_frame* f, int status) {
 
 void sys_create(struct intr_frame* f, const char* file, unsigned initial_size) {  
   /* Todo: Argument validation */
-  if (!is_valid_char_ptr(file)) {
+  if (!is_valid_str(file)) {
     f->eax = -1;
     return;
   }
@@ -135,9 +133,9 @@ void sys_write(struct intr_frame* f, int fd, const void* buffer, unsigned size) 
   } else {
     int bytes_read;
     lock_acquire(&file_sys_lock);
-    struct file* my_file = to_file_ptr(fd);
-    if (my_file) {
-      bytes_read = file_write(my_file, buffer, size);
+    struct file_descriptor* my_file_des = find_file_des(fd);
+    if (my_file_des) {
+      bytes_read = file_write(my_file_des->file, buffer, size);
       f->eax = bytes_read;
       lock_release(&file_sys_lock);
       return;
@@ -149,12 +147,62 @@ void sys_write(struct intr_frame* f, int fd, const void* buffer, unsigned size) 
 }
 
 void sys_seek(struct intr_frame* f, int fd, unsigned position) {
+  if (fd <= 2) {
+    printf("fd: %d can't be seeked. (Either it is a stdin, out, err, or invalid)", fd);
+    f->eax = -1;
+    return;
+  }
+  lock_acquire(&file_sys_lock);
+  struct file_descriptor* my_file_des = find_file_des(fd);
+  if (my_file_des) {
+    file_seek(my_file_des->file, position);
+    f->eax = 0;
+    lock_release(&file_sys_lock);
+    return;
+  }
+  f->eax = -1;
+  lock_release(&file_sys_lock);
   return;
 }
 
-// void sys_tell(struct intr_frame* f, int fd) {return;}
+void sys_tell(struct intr_frame* f, int fd) {
+  if (fd < 0) {
+    printf("fd: %d is invalid.", fd);
+    f->eax = -1;
+    return;
+  }
+  lock_acquire(&file_sys_lock);
+  struct file_descriptor* my_file_des = find_file_des(fd);
+  if (my_file_des) {
+    file_tell(my_file_des->file);
+    f->eax = 0;
+    lock_release(&file_sys_lock);
+    return;
+  }
+  f->eax = -1;
+  lock_release(&file_sys_lock);
+  return;
+}
 
-// void sys_close(struct intr_frame* f, int fd) {return;}
+void sys_close(struct intr_frame* f, int fd) {
+  if (fd < 0) {
+    printf("fd: %d is invalid.", fd);
+    f->eax = -1;
+    return;
+  }
+  lock_acquire(&file_sys_lock);
+  struct file_descriptor* my_file_des = find_file_des(fd);
+  if (my_file_des) {
+    file_close(my_file_des->file);
+    f->eax = 0;
+    free(my_file_des);
+    lock_release(&file_sys_lock);
+    return;
+  }
+  f->eax = -1;
+  lock_release(&file_sys_lock);
+  return;
+}
 
 static void syscall_handler(struct intr_frame* f UNUSED) {
   uint32_t* args = ((uint32_t*)f->esp);
@@ -241,13 +289,13 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       sys_write(f, args[1], (const void*) args[2], args[3]);   /* Revision needed */
       break;
     case SYS_SEEK:
-      sys_seek(f, args[1], args[2]);    /* Pending */
+      sys_seek(f, args[1], args[2]);
       break;
     case SYS_TELL:
-    //   sys_tell(f, args[1]);    /* Pending */
+      sys_tell(f, args[1]);
       break;
     case SYS_CLOSE:
-    //   sys_close(f, args[1]);   /* Pending */
+      sys_close(f, args[1]);
       break;
     default:
       f->eax = -3; /* If the NUMBER is not defined */
