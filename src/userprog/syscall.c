@@ -14,7 +14,7 @@
 static void syscall_handler(struct intr_frame*);
 
 bool is_valid_addr(uint32_t);
-bool is_valid_char_ptr(const char*);
+bool is_valid_str(const char*);
 void sys_practice(struct intr_frame*, int);
 void sys_halt(void);
 void sys_exec(struct intr_frame*, const char*);
@@ -25,14 +25,14 @@ void sys_write(struct intr_frame*, int, const void*, unsigned);
 bool is_valid_addr(uint32_t addr) {
   uint32_t* pd = thread_current()->pcb->pagedir;
   for (int i = 0; i < 4; i++) {
-    if (!(is_user_vaddr(addr) && pagedir_get_page(pd, addr))) {
+    if (!(is_user_vaddr(addr + i) && pagedir_get_page(pd, addr + i))) {
       return false;
     }
   }
   return true;
 }
 
-bool is_valid_char_ptr(const char* c) {
+bool is_valid_str(const char* c) {
   uint32_t* pd = thread_current()->pcb->pagedir;
   while (is_user_vaddr(c) && pagedir_get_page(pd, c)) {
     if (*c == '\0') {
@@ -56,7 +56,7 @@ void sys_halt() {
 
 void sys_exec(struct intr_frame* f, const char* cmd_line) {
   // check if cmd_line valid
-  if (is_valid_char_ptr(cmd_line)) {
+  if (is_valid_str(cmd_line)) {
     f->eax = process_execute(cmd_line);
   }
   else {
