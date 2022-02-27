@@ -23,7 +23,7 @@ void sys_write(struct intr_frame*, int, const void*, unsigned);
 
 bool is_valid_char_ptr(const char* c) {
   uint32_t* pd = thread_current()->pcb->pagedir;
-  while (is_user_vaddr(c) && pagedir_get_page(pd, pg_round_down(c))) {
+  while (is_user_vaddr(c) && pagedir_get_page(pd, c)) {
     if (*c == '\0') {
       return true;
     }
@@ -46,9 +46,11 @@ void sys_halt() {
 void sys_exec(struct intr_frame* f, const char* cmd_line) {
   // check if cmd_line valid
   if (is_valid_char_ptr(cmd_line)) {
+    f->eax = process_execute(cmd_line);
+  }
+  else {
     sys_exit(f, -1);
   }
-  f->eax = process_execute(cmd_line);
   return;
 }
 
@@ -61,10 +63,7 @@ void sys_exit(struct intr_frame* f, int status) {
     f->eax = status;
     printf("%s: exit(%d)\n", thread_current()->pcb->process_name, status);
     struct process* pcb = thread_current()->pcb;
-    decrement_children_ref_cnt(pcb);
-    decrement_ref_cnt(pcb->curr_as_child);
     pcb->curr_as_child->exit_status = status;
-    sema_up(&pcb->curr_as_child->wait_sema);
     process_exit();
 }
 
@@ -138,24 +137,33 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
   /* printf("System call number: %d\n", args[0]); */
 
-  if (args[0] == SYS_EXIT) {
-    f->eax = args[1];
-    printf("%s: exit(%d)\n", thread_current()->pcb->process_name, args[1]);
-    process_exit();
-  }
-
   switch(args[0]) {
     case SYS_PRACTICE:
+      if ((sizeof(int) - 1) & (unsigned long) &args[1]) {
+        sys_exit(f, -1);
+      }
       sys_practice(f, args[1]);
       break;
     case SYS_HALT:
       sys_halt();
       break;
     case SYS_WAIT:
+      if ((sizeof(pid_t) - 1) & (unsigned long) &args[1]) {
+        sys_exit(f, -1);
+      }
+      sys_wait(f, args[1]);
       break;
     case SYS_EXEC:
+      if ((sizeof(char*) - 1) & (unsigned long) &args[1]) {
+        sys_exit(f, -1);
+      }
+      sys_exec(f, (char*) args[1]);
       break;
     case SYS_EXIT:
+      if ((sizeof(int) - 1) & (unsigned long) &args[1]) {
+        sys_exit(f, -1);
+      }
+      sys_exit(f, args[1]);
       break;
     /* File operations */
     // case SYS_CREATE:

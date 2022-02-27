@@ -26,7 +26,6 @@ typedef struct child {
    struct semaphore wait_sema;
    int exit_status;
    bool is_exited;
-   bool is_loaded;
    bool is_waiting;
    int ref_cnt;      // need lock
    struct lock ref_lock;
@@ -73,8 +72,6 @@ pid_t process_execute(const char* file_name);
 int process_wait(pid_t);
 void process_exit(void);
 void process_activate(void);
-void decrement_ref_cnt(CHILD*);
-void decrement_children_ref_cnt(struct process*);
 
 bool is_main_thread(struct thread*, struct process*);
 pid_t get_pid(struct process*);
