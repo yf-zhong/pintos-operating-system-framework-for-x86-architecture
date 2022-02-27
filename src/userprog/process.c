@@ -29,6 +29,7 @@ CHILD* find_child(pid_t);
 void decrement_ref_cnt(CHILD*);
 void decrement_children_ref_cnt(struct process*);
 void exit_setup(struct process*);
+void free_spa(SPA*);
 
 /* Initializes user programs in the system by ensuring the main
    thread has a minimal PCB so that it can execute and wait for
@@ -66,6 +67,12 @@ CHILD* new_child() {
   return cptr;
 }
 
+void free_spa(SPA* spaptr) {
+  palloc_free_page(spaptr->file_name);
+  palloc_free_page(spaptr->new_c);
+  palloc_free_page(spaptr);
+}
+
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -87,20 +94,24 @@ pid_t process_execute(const char* file_name) {
   }
   strlcpy(spaptr->file_name, file_name, PGSIZE - sizeof(spaptr->new_c));
   
+  char* file_name_cpy = (char*) malloc(sizeof(char) * (strlen(file_name) + 1));
+  char* cpy_base = file_name_cpy;
+  strlcpy(file_name_cpy, file_name, strlen(file_name) + 1);
+  char** saveptr = &file_name_cpy;
+  char* prog_name = strtok_r(file_name_cpy, " ", saveptr);
 
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create(file_name, PRI_DEFAULT, start_process, spaptr);
+  tid = thread_create(prog_name, PRI_DEFAULT, start_process, spaptr);
   sema_down(&spaptr->new_c->exec_sema);
+  free(cpy_base);
   struct process* pcb = thread_current()->pcb;
   lock_acquire(&pcb->c_lock);
   list_push_front(&pcb->children, &spaptr->new_c->elem);
   lock_release(&pcb->c_lock);
 
   if (tid == TID_ERROR) {
-    palloc_free_page(spaptr->file_name);
-    palloc_free_page(spaptr->new_c);
-    palloc_free_page(spaptr);
+    free_spa(spaptr);
   }
   return tid;
 }
@@ -162,7 +173,7 @@ static void start_process(void* spaptr_) {
   sema_up(&new_c->exec_sema);
 
   /* Clean up. Exit on failure or jump to userspace */
-  palloc_free_page(file_name);
+  palloc_free_page(spaptr->file_name);
   if (!success) {
     sema_up(&temporary);
     thread_exit();
@@ -240,9 +251,9 @@ void decrement_children_ref_cnt(struct process* pcb) {
 
 void exit_setup(struct process* pcb_to_free) {
   pcb_to_free->curr_as_child->is_exited = true;
-  sema_up(&pcb_to_free->curr_as_child->wait_sema);
   decrement_children_ref_cnt(pcb_to_free);
   decrement_ref_cnt(pcb_to_free->curr_as_child);
+  sema_up(&pcb_to_free->curr_as_child->wait_sema);
 }
 
 /* Free the current process's resources. */
@@ -398,7 +409,7 @@ void args_split(char* file_name, char* argv[]) {
 
 void args_load(const char* file_name, void** esp) {
   char* file_name_cpy = (char*) malloc(sizeof(char) * (strlen(file_name) + 1));
-  int nArgs = count_args(file_name_cpy);
+  int nArgs = count_args(file_name);
   char** args = (char**) malloc(sizeof(char*) * nArgs);
   unsigned int allByteCount = sizeof(char*) * (nArgs + 1) + sizeof(char**) + sizeof(int);
   strlcpy(file_name_cpy, file_name, strlen(file_name) + 1);
@@ -456,7 +467,13 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   process_activate();
 
   /* Open executable file. */
-  file = filesys_open(file_name);
+  char* file_name_cpy = (char*) malloc(sizeof(char) * (strlen(file_name) + 1));
+  char* cpy_base = file_name_cpy;
+  strlcpy(file_name_cpy, file_name, strlen(file_name) + 1);
+  char** saveptr = &file_name_cpy;
+  char* prog_name = strtok_r(file_name_cpy, " ", saveptr);
+  file = filesys_open(prog_name);
+  free(cpy_base);
   if (file == NULL) {
     printf("load: %s: open failed\n", file_name);
     goto done;
