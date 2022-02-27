@@ -8,6 +8,8 @@
 #include "threads/loader.h"
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
+#include "filesys/filesys.h"
+#include "filesys/file.h"
 
 static void syscall_handler(struct intr_frame*);
 
@@ -17,7 +19,7 @@ void sys_halt(void);
 void sys_exec(struct intr_frame*, const char*);
 void sys_wait(struct intr_frame*, pid_t);
 void sys_exit(struct intr_frame*, int);
-
+void sys_write(struct intr_frame*, int, const void*, unsigned);
 
 bool is_valid_char_ptr(const char* c) {
   uint32_t* pd = thread_current()->pcb->pagedir;
@@ -66,9 +68,63 @@ void sys_exit(struct intr_frame* f, int status) {
     process_exit();
 }
 
-// void file_create(struct intr_frame f, const char* file, unsigned initial_size) {
-  
+// void sys_create(struct intr_frame* f, const char* file, unsigned initial_size) {
+//   /* Get current user program pcb */
+//   /* Argument validation */
+//   if (is_valid_char_ptr(file)) {
+//     sys_exit(f, -1);
+//   }
+//   struct process* pcb = thread_current()->pcb;
+//   bool flag;
+//   /* Lock required */
+//   lock_acquire(&file_sys_lock);
+//   flag = filesys_create(file, initial_size);
+//   /* Lock release required */
+//   lock_release(&file_sys_lock);
+//   f->eax = flag;
+//   return;
 // }
+
+// void sys_remove(struct intr_frame* f, const char* file) {return;}
+
+// void sys_open(struct intr_frame* f, const char* file) {return;}
+
+// void sys_filesize(struct intr_frame* f, int fd) {return;}
+
+// void sys_read(struct intr_frame* f, int fd, void* buffer, unsigned size) {return;}
+
+void sys_write(struct intr_frame* f, int fd, const void* buffer, unsigned size) {
+  if (fd == 1) {
+    putbuf(buffer, size);
+  } else if (fd == 2) {
+    /* Need rewrite here */
+    // process_exit();
+    f->eax = -1;
+  } else {
+    int bytes_read;
+    struct process* pcb = thread_current()->pcb;
+    lock_acquire(&file_sys_lock);
+    struct list_elem *e;
+    for (e = list_begin(&(pcb->file_descriptor_table)); e != list_end(&(pcb->file_descriptor_table)); e = list_next(e)) {
+      struct file_descriptor *descriptor = list_entry(e, struct file_descriptor, elem);
+      if (descriptor->fd == fd) {
+        bytes_read = file_write(descriptor->file, buffer, size);
+        f->eax = bytes_read;
+        lock_release(&file_sys_lock);
+        return;
+      }
+    }
+    f->eax = -2;
+    lock_release(&file_sys_lock);
+  }
+  return;
+}
+
+// void sys_seek(struct intr_frame* f, int fd, unsigned position) {return;}
+
+// void sys_tell(struct intr_frame* f, int fd) {return;}
+
+// void sys_close(struct intr_frame* f, int fd) {return;}
 
 static void syscall_handler(struct intr_frame* f UNUSED) {
   uint32_t* args = ((uint32_t*)f->esp);
@@ -102,32 +158,33 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     case SYS_EXIT:
       break;
     /* File operations */
-    case SYS_CREATE:
-      file_create(f, args[1], args[2]);  /* Working On */
-      break;
-    case SYS_REMOVE:
-      file_remove(f, args[1]);  /* Pending */
-      break;
-    case SYS_OPEN:
-      file_open(f, args[1]);    /* Pending */
-      break;
-    case SYS_FILESIZE:
-      file_filesize(f, args[1]);/* Pending */
-      break;
-    case SYS_READ:
-      file_read(f, args[1]);    /* Pending */
-      break;
+    // case SYS_CREATE:
+    //   sys_create(f, args[1], args[2]);  /* Working On */
+    //   break;
+    // case SYS_REMOVE:
+    //   sys_remove(f, args[1]);  /* Pending */
+    //   break;
+    // case SYS_OPEN:
+    //   sys_open(f, args[1]);    /* Pending */
+    //   break;
+    // case SYS_FILESIZE:
+    //   sys_filesize(f, args[1]);/* Pending */
+    //   break;
+    // case SYS_READ:
+    //   sys_read(f, args[1]);    /* Pending */
+    //   break;
     case SYS_WRITE:
-      file_write(f, args[1]);   /* Pending */
+      // int *fd = args[2];
+      sys_write(f, args[1], args[2], args[3]);   /* Pending */
       break;
-    case SYS_SEEK:
-      file_seek(f, args[1]);    /* Pending */
-      break;
-    case SYS_TELL:
-      file_tell(f, args[1]);    /* Pending */
-      break;
-    case SYS_CLOSE:
-      file_close(f, args[1]);   /* Pending */
-      break;
+    // case SYS_SEEK:
+    //   sys_seek(f, args[1]);    /* Pending */
+    //   break;
+    // case SYS_TELL:
+    //   sys_tell(f, args[1]);    /* Pending */
+    //   break;
+    // case SYS_CLOSE:
+    //   sys_close(f, args[1]);   /* Pending */
+    //   break;
   }
 }

@@ -47,7 +47,7 @@ struct process {
   struct list children;
   struct child* curr_as_child;
   int cur_fd;                 /* The fd number assigned to new file */
-  struct lock file_sys_lock;  /* Lock for the file system operation */
+//   struct lock file_sys_lock;  /* Lock for the file system operation, in syscall.h now */
   struct list file_descriptor_table; /* All the files opened in current process */
 };
 
