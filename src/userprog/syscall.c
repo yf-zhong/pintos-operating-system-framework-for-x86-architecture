@@ -24,7 +24,7 @@ void sys_exit(struct intr_frame*, int);
 bool is_valid_addr(uint32_t addr) {
   uint32_t* pd = thread_current()->pcb->pagedir;
   for (int i = 0; i < 4; i++) {
-    if (!(is_user_vaddr(addr + i) && pagedir_get_page(pd, addr + i))) {
+    if (!(is_user_vaddr((const char *) addr + i) && pagedir_get_page(pd, (const char *) addr + i))) {
       return false;
     }
   }
@@ -41,20 +41,6 @@ bool is_valid_str(const char* c) {
   }
   return false;
 }
-
-struct file* to_file_ptr(int fd) {
-  struct process* pcb = thread_current()->pcb;
-  struct list_elem *e;
-  for (e = list_begin(&(pcb->file_descriptor_table)); e != list_end(&(pcb->file_descriptor_table)); e = list_next(e)) {
-    struct file_descriptor *descriptor = list_entry(e, struct file_descriptor, elem);
-    if (descriptor->fd == fd) {
-      return descriptor->file;
-    }
-  }
-  return NULL;
-}
-
-
 
 void syscall_init(void) {
   intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
@@ -96,11 +82,9 @@ void sys_exit(struct intr_frame* f, int status) {
 
 void sys_create(struct intr_frame* f, const char* file, unsigned initial_size) {  
   /* Todo: Argument validation */
-  if (!is_valid_char_ptr(file)) {
-    f->eax = -1;
-    return;
+  if (!is_valid_str(file)) {
+    sys_exit(f, -1);
   }
-
   /* Get current user program pcb */
   bool flag;
   /* Lock required */
@@ -112,9 +96,48 @@ void sys_create(struct intr_frame* f, const char* file, unsigned initial_size) {
   return;
 }
 
-// void sys_remove(struct intr_frame* f, const char* file) {return;}
+void sys_remove(struct intr_frame* f, const char* file) {
+  // use filesys_remove(const char *name)
+  if (!is_valid_str(file)) {
+    sys_exit(f, -1);
+  }
+  bool flag;
+  lock_acquire(&file_sys_lock);
+  flag = filesys_remove(file);
+  lock_release(&file_sys_lock);
+  f->eax = flag;
+  return;
+}
 
-// void sys_open(struct intr_frame* f, const char* file) {return;}
+void sys_open(struct intr_frame* f, const char* file) {
+  // use filesys_open(const char *name)
+  if (!is_valid_str(file)) {
+    sys_exit(f, -1);
+  }
+  // int flag;
+  lock_acquire(&file_sys_lock);
+  struct process* pcb = thread_current()->pcb;
+  struct file *new_file = filesys_open(file);
+  if (!new_file) {
+    f->eax = -1;
+    return;
+  }
+  struct file_descriptor *new_file_descriptor = (struct file_descriptor *) malloc(sizeof(struct file_descriptor));
+  if (!new_file_descriptor) {
+    sys_exit(f, -1);
+  }
+  // new_file_descriptor->fd = list_size(pcb->file_descriptor_table) + 1;
+  new_file_descriptor->fd = pcb->cur_fd++; /* Alter 2, Alter 1 above, choose later */
+  new_file_descriptor->file = new_file;
+  /* ref_cnt is commented out, no need */
+  // lock_acquire(&(pcb->ref_cnt_lock));
+  // int ref_cnt = 1;
+  // lock_release(&(pcb->ref_cnt_lock));
+  list_push_back(&(pcb->file_descriptor_table) ,&(new_file_descriptor->elem));
+  f->eax = new_file_descriptor->fd;
+  lock_release(&file_sys_lock);
+  return;
+}
 
 // void sys_filesize(struct intr_frame* f, int fd) {return;}
 
@@ -123,15 +146,17 @@ void sys_create(struct intr_frame* f, const char* file, unsigned initial_size) {
 void sys_write(struct intr_frame* f, int fd, const void* buffer, unsigned size) {
   /* Argument validation (may need to test whether buffer is big enough) */
   if (!buffer) {
-    f->eax = -1;
-    return;
+    // f->eax = -1;
+    // return;
+    sys_exit(f, -1);
   }
   
   if (fd == 1) {
     putbuf(buffer, size);
-  } else if (fd == 2 || fd <= 0) {
+  } else if (fd <= 0) {
     /* TODO: May need revise */
-    f->eax = -1;
+    // f->eax = -1;
+    sys_exit(f, -1);
   } else {
     int bytes_read;
     lock_acquire(&file_sys_lock);
@@ -179,7 +204,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       break;
   }
   for (int i = 0; i <= num_args; i++) {
-    if (!is_valid_addr(&args[i])) {
+    if (!is_valid_addr((uint32_t) &args[i])) {
       f->eax = -1;
       printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
       process_exit();
@@ -197,7 +222,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       sys_wait(f, args[1]);
       break;
     case SYS_EXEC:
-      if (((sizeof(pid_t) - 1) & (unsigned long) &args[1]) || !is_valid_addr(&args[1])) {
+      if (((sizeof(pid_t) - 1) & (unsigned long) &args[1]) || !is_valid_addr((uint32_t) &args[1])) {
         sys_exit(f, -1);
       }
       sys_exec(f, (char*) args[1]);
@@ -211,24 +236,22 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       if ((sizeof(char*) - 1) & (unsigned long) &args[1]) {
           sys_exit(f, -1);
       }
-      sys_create(f, (const char*) args[1], args[2]);  /* Working On */
+      sys_create(f, (const char*) args[1], args[2]);  /* Revision */
       break;
     case SYS_REMOVE:
       if ((sizeof(char*) - 1) & (unsigned long) &args[1]) {
           sys_exit(f, -1);
       }
-    //   sys_remove(f, args[1]);  /* Pending */
-    //   use filesys_remove(const char *name)
+      sys_remove(f, (const char*) args[1]);  /* Revision, no local test provided */
       break;
     case SYS_OPEN:
       if ((sizeof(char*) - 1) & (unsigned long) &args[1]) {
           sys_exit(f, -1);
       }
-    //   sys_open(f, args[1]);    /* Pending */
-    //   use filesys_open(const char *name)
+      sys_open(f, (const char*) args[1]);                  /* Working */
       break;
     case SYS_FILESIZE:
-    //   sys_filesize(f, args[1]);/* Pending */
+    //   sys_filesize(f, args[1]);           /* Pending */
     //   use file_length(struct file*)
       break;
     case SYS_READ:

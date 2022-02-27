@@ -130,6 +130,9 @@ void t_pcb_init(struct thread* t, struct process *new_pcb, CHILD *new_c) {
   if (new_c) {
     new_c->pid = get_pid(new_pcb);
   }
+  /* Initialize fd related structure member */
+  t->pcb->cur_fd = 2;
+  list_init(&t->pcb->file_descriptor_table);
 }
 
 /* A thread function that loads a user process and starts it

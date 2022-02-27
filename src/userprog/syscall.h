@@ -8,7 +8,7 @@ struct lock file_sys_lock;  /* Lock for the file system operation */
 
 /* File operation syscalls */
 void sys_create(struct intr_frame*, const char*, unsigned);
-// void sys_remove(struct intr_frame*, const char*);
+void sys_remove(struct intr_frame*, const char*);
 // void sys_open(struct intr_frame*, const char*);
 // void sys_filesize(struct intr_frame*, int);
 // void sys_read(struct intr_frame*, int, void*, unsigned);
