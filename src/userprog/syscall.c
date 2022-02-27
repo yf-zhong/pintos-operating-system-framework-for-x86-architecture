@@ -306,16 +306,3 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       f->eax = -3; /* If the NUMBER is not defined */
   }
 }
-
-/* Iterate through file descriptor table to find fd. */
-struct file* to_file_ptr(int fd) {
-  struct process* pcb = thread_current()->pcb;
-  struct list_elem *e;
-  for (e = list_begin(&(pcb->file_descriptor_table)); e != list_end(&(pcb->file_descriptor_table)); e = list_next(e)) {
-    struct file_descriptor *descriptor = list_entry(e, struct file_descriptor, elem);
-    if (descriptor->fd == fd) {
-      return descriptor->file;
-    }
-  }
-  return NULL;
-}

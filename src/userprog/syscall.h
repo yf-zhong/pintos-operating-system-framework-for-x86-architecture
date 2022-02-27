@@ -16,7 +16,7 @@ void sys_tell(struct intr_frame*, int);
 void sys_close(struct intr_frame*, int);
 
 /* Iterater through file descriptor table to find fd. */
-struct file* to_file_ptr(int);
+struct file_descriptor* find_file_des(int);
 
 
 #endif /* userprog/syscall.h */
