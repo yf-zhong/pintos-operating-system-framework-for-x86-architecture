@@ -113,6 +113,9 @@ pid_t process_execute(const char* file_name) {
   if (tid == TID_ERROR) {
     free_spa(spaptr);
   }
+  else {
+    palloc_free_page(spaptr);
+  }
   return tid;
 }
 
@@ -190,9 +193,9 @@ static void start_process(void* spaptr_) {
 }
 
 CHILD* find_child(pid_t pid) {
-  struct list children = thread_current()->pcb->children;
+  struct list *children = &thread_current()->pcb->children;
   CHILD* cptr;
-  for (struct list_elem *e = list_begin(&children); e != list_end(&children);
+  for (struct list_elem *e = list_begin(children); e != list_end(children);
       e = list_next(e)) {
     cptr = list_entry(e, CHILD, elem);
     if (cptr->pid == pid) {
