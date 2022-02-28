@@ -20,7 +20,6 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
  
-static struct semaphore temporary;
 static thread_func start_process NO_RETURN;
 static bool load(const char* file_name, void (**eip)(void), void** esp);
 CHILD* new_child(void);
@@ -81,7 +80,6 @@ pid_t process_execute(const char* file_name) {
   SPA* spaptr;
   tid_t tid;
 
-  sema_init(&temporary, 0);
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   spaptr = (SPA*) palloc_get_page(0);
@@ -109,11 +107,13 @@ pid_t process_execute(const char* file_name) {
   lock_acquire(&pcb->c_lock);
   list_push_front(&pcb->children, &spaptr->new_c->elem);
   lock_release(&pcb->c_lock);
-
   if (tid == TID_ERROR) {
     free_spa(spaptr);
   }
   else {
+    if (spaptr->new_c->is_exited && spaptr->new_c->exit_status == ERROR) {
+      tid = -1;
+    }
     palloc_free_page(spaptr);
   }
   return tid;
@@ -181,7 +181,6 @@ static void start_process(void* spaptr_) {
   /* Clean up. Exit on failure or jump to userspace */
   palloc_free_page(spaptr->file_name);
   if (!success) {
-    sema_up(&temporary);
     thread_exit();
   }
 
@@ -314,7 +313,6 @@ void process_exit(void) {
   cur->pcb = NULL;
   exit_setup(pcb_to_free);
   free(pcb_to_free);
-  sema_up(&temporary);
   thread_exit();
 }
 
@@ -408,7 +406,7 @@ void args_split(char*, char**);
 int count_args(const char* file_name) {
   int count = 0;
   for (int i = 1; file_name[i] != '\0'; i++) {
-    if (file_name[i] == ' ' && file_name[i - 1] != ' ') {
+    if (file_name[i] == ' ' && file_name[i - 1] != ' ' && file_name[i + 1] != '\0') {
       count++;
     }
   }
