@@ -15,5 +15,8 @@ void sys_seek(struct intr_frame*, int, unsigned);
 void sys_tell(struct intr_frame*, int);
 void sys_close(struct intr_frame*, int);
 
+/* Lock for the file system operation */
+struct lock file_sys_lock;
+
 
 #endif /* userprog/syscall.h */
