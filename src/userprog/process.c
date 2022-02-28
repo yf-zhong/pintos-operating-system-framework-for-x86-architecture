@@ -306,8 +306,14 @@ void process_exit(void) {
   struct process* pcb_to_free = cur->pcb;
 
   /* Close all the file descriptors */
+  /* Wrong one!!! Halt in internal list_remove() call */
+  // while (!list_empty(&(pcb_to_free->file_descriptor_table))) {
+  //   list_pop_back(&(pcb_to_free->file_descriptor_table));
+  // }
   while (!list_empty(&pcb_to_free->file_descriptor_table)) {
-    list_pop_back(&pcb_to_free->file_descriptor_table);
+    struct list_elem *e = list_pop_front(&pcb_to_free->file_descriptor_table);
+    // size_t size = list_size(&pcb_to_free->file_descriptor_table);
+    free(list_entry(e, struct file_descriptor, elem));
   }
 
   cur->pcb = NULL;
