@@ -186,7 +186,7 @@ void sys_write(struct intr_frame* f, int fd, const void* buffer, unsigned size) 
 }
 
 void sys_seek(struct intr_frame* f, int fd, unsigned position) {
-  if (fd <= 2) {
+  if (fd <= 1) {
     printf("fd: %d can't be seeked. (Either it is a stdin, out, err, or invalid)", fd);
     f->eax = -1;
     return;
