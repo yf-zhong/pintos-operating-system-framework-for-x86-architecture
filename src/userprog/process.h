@@ -46,16 +46,18 @@ struct process {
   struct list children;
   struct child* curr_as_child;
   int cur_fd;                 /* The fd number assigned to new file */
-//   struct lock file_sys_lock;  /* Lock for the file system operation, in syscall.h now */
   struct list file_descriptor_table; /* All the files opened in current process */
 };
+
+struct lock file_sys_lock;  /* Lock for the file system operation */
 
 /* One element in the file descriptor table */
 struct file_descriptor {
    int fd;                   /* File descriptor */
-   struct file *file;        /* File descriptor */
-   int ref_cnt;              /* Number of processes currently using the file */
-   struct lock ref_cnt_lock; /* Protect reference count per file */
+   // char *file_name;          /* Name of the file */
+   struct file *file;        /* File description */
+   // int ref_cnt;              /* Number of processes currently using the file */
+   // struct lock ref_cnt_lock; /* Protect reference count per file */
    struct list_elem elem;
 };
 
@@ -75,5 +77,8 @@ void process_activate(void);
 
 bool is_main_thread(struct thread*, struct process*);
 pid_t get_pid(struct process*);
+
+/* Iterater through file descriptor table to find fd. */
+struct file_descriptor* find_file_des(int);
 
 #endif /* userprog/process.h */
