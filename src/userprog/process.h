@@ -78,4 +78,7 @@ void process_activate(void);
 bool is_main_thread(struct thread*, struct process*);
 pid_t get_pid(struct process*);
 
+/* Iterater through file descriptor table to find fd. */
+struct file_descriptor* find_file_des(int);
+
 #endif /* userprog/process.h */
