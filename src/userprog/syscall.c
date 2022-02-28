@@ -5,6 +5,7 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "devices/input.h"
 #include "userprog/process.h"
 #include "devices/shutdown.h"
 #include "threads/loader.h"
@@ -119,6 +120,7 @@ void sys_open(struct intr_frame* f, const char* file) {
   // int flag;
   lock_acquire(&file_sys_lock);
   struct process* pcb = thread_current()->pcb;
+  // file_deny_write() necessary?
   struct file *new_file = filesys_open(file);
   if (!new_file) {
     f->eax = -1;
@@ -141,23 +143,56 @@ void sys_open(struct intr_frame* f, const char* file) {
   return;
 }
 
-// void sys_filesize(struct intr_frame* f, int fd) {return;}
+void sys_filesize(struct intr_frame* f, int fd) {
+  // use file_length(struct file*)
+  if (fd <= 1) {
+    sys_exit(f, -1);
+  }
+  off_t file_size;
+  lock_acquire(&file_sys_lock);
+  struct file_descriptor *my_file_des = find_file_des(fd);
+  if (!my_file_des) {
+    sys_exit(f, -1);
+  }
+  file_size = file_length(my_file_des->file);
+  lock_release(&file_sys_lock);
+  f->eax = file_size;
+  return;
+}
 
-// void sys_read(struct intr_frame* f, int fd, void* buffer, unsigned size) {return;}
+void sys_read(struct intr_frame* f, int fd, void* buffer, unsigned size) {
+  if (!buffer) {
+    sys_exit(f, -1);
+  }
+  off_t number_read = 0;
+  if (fd == 0) {
+    /* Do we need a for loop here to read file buffer? */
+    for (unsigned i = 0; i < size; i++) {
+      number_read += input_getc();
+    }
+    return;
+  } else if (fd == 1 || fd < 0) {
+    sys_exit(f, -1);
+  }
+  lock_acquire(&file_sys_lock);
+  struct file_descriptor *my_file_des = find_file_des(fd);
+  if (!my_file_des) {
+    sys_exit(f, -1);
+  }
+  number_read = file_read(my_file_des->file, buffer, size);
+  lock_release(&file_sys_lock);
+  f->eax = number_read;
+  return;
+}
 
 void sys_write(struct intr_frame* f, int fd, const void* buffer, unsigned size) {
   /* Argument validation (may need to test whether buffer is big enough) */
   if (!buffer) {
-    // f->eax = -1;
-    // return;
     sys_exit(f, -1);
   }
-  
   if (fd == 1) {
     putbuf(buffer, size);
   } else if (fd <= 0) {
-    /* TODO: May need revise */
-    // f->eax = -1;
     sys_exit(f, -1);
   } else {
     int bytes_read;
@@ -224,7 +259,7 @@ void sys_close(struct intr_frame* f, int fd) {
   if (my_file_des) {
     file_close(my_file_des->file);
     f->eax = 0;
-    free(my_file_des);
+    list_remove(&my_file_des->elem);
     lock_release(&file_sys_lock);
     return;
   }
@@ -300,18 +335,16 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       if ((sizeof(char*) - 1) & (unsigned long) &args[1]) {
           sys_exit(f, -1);
       }
-      sys_open(f, (const char*) args[1]);                  /* Working */
+      sys_open(f, (const char*) args[1]);                  /* Done! Wooohoooooo */
       break;
-    case SYS_FILESIZE:
-    //   sys_filesize(f, args[1]);           /* Pending */
-    //   use file_length(struct file*)
+    case SYS_FILESIZE:                  /* Revision (may) needed, no local test provided */
+      sys_filesize(f, args[1]);
       break;
-    case SYS_READ:
+    case SYS_READ:                                  /* Working */
       if ((sizeof(void*) - 1) & (unsigned long) &args[2]) {
           sys_exit(f, -1);
       }
-    //   sys_read(f, args[1]);    /* Pending */
-    //   use file_read(struct file*, void *, off_t)
+      sys_read(f, args[1], (void*) args[2], args[3]);
       break;
     case SYS_WRITE:
       if ((sizeof(void*) - 1) & (unsigned long) &args[2]) {
