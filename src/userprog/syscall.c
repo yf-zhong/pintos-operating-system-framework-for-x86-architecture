@@ -141,9 +141,27 @@ void sys_open(struct intr_frame* f, const char* file) {
   return;
 }
 
-// void sys_filesize(struct intr_frame* f, int fd) {return;}
+void sys_filesize(struct intr_frame* f, int fd) {
+  // use file_length(struct file*)
+  if (fd <= 1) {
+    sys_exit(f, -1);
+  }
+  off_t file_size;
+  struct file_descriptor *my_file_des = find_file_des(fd);
+  if (!my_file_des) {
+    sys_exit(f, -1);
+  }
+  file_size = file_length(my_file_des->file);
+  f->eax = file_size;
+  return;
+}
 
-// void sys_read(struct intr_frame* f, int fd, void* buffer, unsigned size) {return;}
+void sys_read(struct intr_frame* f, int fd, void* buffer, unsigned size) {
+  if (fd == 0) {
+    f->eax = input_getc();
+  }
+  return;
+}
 
 void sys_write(struct intr_frame* f, int fd, const void* buffer, unsigned size) {
   /* Argument validation (may need to test whether buffer is big enough) */
@@ -300,18 +318,16 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       if ((sizeof(char*) - 1) & (unsigned long) &args[1]) {
           sys_exit(f, -1);
       }
-      sys_open(f, (const char*) args[1]);                  /* Working */
+      sys_open(f, (const char*) args[1]);                  /* Done! Wooohoooooo */
       break;
-    case SYS_FILESIZE:
-    //   sys_filesize(f, args[1]);           /* Pending */
-    //   use file_length(struct file*)
+    case SYS_FILESIZE:                  /* Revision (may) needed, no local test provided */
+      sys_filesize(f, args[1]);
       break;
-    case SYS_READ:
+    case SYS_READ:                                  /* Working */
       if ((sizeof(void*) - 1) & (unsigned long) &args[2]) {
           sys_exit(f, -1);
       }
-    //   sys_read(f, args[1]);    /* Pending */
-    //   use file_read(struct file*, void *, off_t)
+      sys_read(f, (void*) args[1]);
       break;
     case SYS_WRITE:
       if ((sizeof(void*) - 1) & (unsigned long) &args[2]) {
