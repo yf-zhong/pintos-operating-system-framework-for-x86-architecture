@@ -44,18 +44,6 @@ bool is_valid_str(const char* c) {
   return false;
 }
 
-// struct file_descriptor* find_file_des(int fd) {
-//   struct process* pcb = thread_current()->pcb;
-//   struct list_elem *e;
-//   for (e = list_begin(&(pcb->file_descriptor_table)); e != list_end(&(pcb->file_descriptor_table)); e = list_next(e)) {
-//     struct file_descriptor* descriptor = list_entry(e, struct file_descriptor, elem);
-//     if (descriptor->fd == fd) {
-//       return descriptor;
-//     }
-//   }
-//   return NULL;
-// }
-
 void syscall_init(void) {
   intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
   lock_init(&file_sys_lock); /* Init the lock for file syscall */

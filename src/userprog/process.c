@@ -306,16 +306,10 @@ void process_exit(void) {
      can try to activate the pagedir, but it is now freed memory */
   struct process* pcb_to_free = cur->pcb;
 
-  /* also close all fd in this process */
-  lock_acquire(&file_sys_lock);
-  for (int i = 2; i <= pcb_to_free->cur_fd; i++) {
-    struct file_descriptor* my_file_des = find_file_des(i);
-    if (my_file_des) {
-      file_close(my_file_des->file);
-      free(my_file_des);
-    }
+  /* Close all the file descriptors */
+  while (!list_empty(&pcb_to_free->file_descriptor_table)) {
+    list_pop_back(&pcb_to_free->file_descriptor_table);
   }
-  lock_release(&file_sys_lock);
 
   cur->pcb = NULL;
   exit_setup(pcb_to_free);
