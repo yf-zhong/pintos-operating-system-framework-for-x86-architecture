@@ -128,6 +128,7 @@ void sys_open(struct intr_frame* f, const char* file) {
   }
   struct file_descriptor *new_file_descriptor = (struct file_descriptor *) malloc(sizeof(struct file_descriptor));
   if (!new_file_descriptor) {
+    lock_release(&file_sys_lock);
     sys_exit(f, -1);
   }
   // new_file_descriptor->fd = list_size(pcb->file_descriptor_table) + 1;
@@ -152,6 +153,7 @@ void sys_filesize(struct intr_frame* f, int fd) {
   lock_acquire(&file_sys_lock);
   struct file_descriptor *my_file_des = find_file_des(fd);
   if (!my_file_des) {
+    lock_release(&file_sys_lock);
     sys_exit(f, -1);
   }
   file_size = file_length(my_file_des->file);
@@ -172,11 +174,13 @@ void sys_read(struct intr_frame* f, int fd, void* buffer, unsigned size) {
     }
     return;
   } else if (fd == 1 || fd < 0) {
+    // printf("fd: %d can't be read.", fd);
     sys_exit(f, -1);
   }
   lock_acquire(&file_sys_lock);
   struct file_descriptor *my_file_des = find_file_des(fd);
   if (!my_file_des) {
+    lock_release(&file_sys_lock);
     sys_exit(f, -1);
   }
   number_read = file_read(my_file_des->file, buffer, size);
@@ -321,37 +325,36 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     /* File operations */
     case SYS_CREATE:
       if ((sizeof(char*) - 1) & (unsigned long) &args[1]) {
-          sys_exit(f, -1);
+        sys_exit(f, -1);
       }
       sys_create(f, (const char*) args[1], args[2]);  /* Revision */
       break;
     case SYS_REMOVE:
       if ((sizeof(char*) - 1) & (unsigned long) &args[1]) {
-          sys_exit(f, -1);
+        sys_exit(f, -1);
       }
       sys_remove(f, (const char*) args[1]);  /* Revision, no local test provided */
       break;
     case SYS_OPEN:
       if ((sizeof(char*) - 1) & (unsigned long) &args[1]) {
-          sys_exit(f, -1);
+        sys_exit(f, -1);
       }
       sys_open(f, (const char*) args[1]);                  /* Done! Wooohoooooo */
       break;
     case SYS_FILESIZE:                  /* Revision (may) needed, no local test provided */
       sys_filesize(f, args[1]);
       break;
-    case SYS_READ:                                  /* Working */
+    case SYS_READ:                                  /* Done */
       if ((sizeof(void*) - 1) & (unsigned long) &args[2]) {
-          sys_exit(f, -1);
+        sys_exit(f, -1);
       }
       sys_read(f, args[1], (void*) args[2], args[3]);
       break;
     case SYS_WRITE:
       if ((sizeof(void*) - 1) & (unsigned long) &args[2]) {
-          sys_exit(f, -1);
+        sys_exit(f, -1);
       }
       sys_write(f, args[1], (const void*) args[2], args[3]);   /* Revision needed */
-    //   use file_write()
       break;
     case SYS_SEEK:
       sys_seek(f, args[1], args[2]);
@@ -363,6 +366,6 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       sys_close(f, args[1]);
       break;
     default:
-      f->eax = -3; /* If the NUMBER is not defined */
+      f->eax = -1; /* If the NUMBER is not defined */
   }
 }
