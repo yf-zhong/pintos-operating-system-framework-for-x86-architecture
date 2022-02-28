@@ -206,6 +206,15 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  /* Save current FPU registers values to local variable,
+     initialize it again for new thread/process and store it in *sf,
+     and restore the current ones */
+  int local_var[27];
+  asm volatile("FSAVE (%0)" : : "g"(&local_var) : "memory");
+  asm volatile("FNINIT" : : : "memory");
+  asm volatile("FSAVE (%0)" : : "g"(&sf->fpu) : "memory");
+  asm volatile("FRSTOR (%0)" : : "g"(&local_var) : "memory");
+
   /* Add to run queue. */
   thread_unblock(t);
 

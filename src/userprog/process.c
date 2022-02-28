@@ -162,6 +162,16 @@ static void start_process(void* spaptr_) {
     if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
     if_.cs = SEL_UCSEG;
     if_.eflags = FLAG_IF | FLAG_MBS;
+
+    /* Save current FPU registers values to local variable,
+     initialize it again for new thread/process and store it in *sf,
+     and restore the current ones */
+    int local_var[27];
+    asm volatile("FSAVE (%0)" : : "g"(&local_var) : "memory");
+    asm volatile("FNINIT" : : : "memory");
+    asm volatile("FSAVE (%0)" : : "g"(&if_.fpu) : "memory");
+    asm volatile("FRSTOR (%0)" : : "g"(&local_var) : "memory");
+
     success = load(file_name, &if_.eip, &if_.esp);
   }
 
