@@ -49,6 +49,8 @@ struct process {
   struct list file_descriptor_table; /* All the files opened in current process */
 };
 
+struct lock file_sys_lock;  /* Lock for the file system operation */
+
 /* One element in the file descriptor table */
 struct file_descriptor {
    int fd;                   /* File descriptor */

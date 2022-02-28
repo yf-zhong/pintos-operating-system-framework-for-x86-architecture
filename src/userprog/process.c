@@ -262,6 +262,18 @@ void exit_setup(struct process* pcb_to_free) {
   sema_up(&pcb_to_free->curr_as_child->wait_sema);
 }
 
+struct file_descriptor* find_file_des(int fd) {
+  struct process* pcb = thread_current()->pcb;
+  struct list_elem *e;
+  for (e = list_begin(&(pcb->file_descriptor_table)); e != list_end(&(pcb->file_descriptor_table)); e = list_next(e)) {
+    struct file_descriptor* descriptor = list_entry(e, struct file_descriptor, elem);
+    if (descriptor->fd == fd) {
+      return descriptor;
+    }
+  }
+  return NULL;
+}
+
 /* Free the current process's resources. */
 void process_exit(void) {
   struct thread* cur = thread_current();
@@ -293,6 +305,18 @@ void process_exit(void) {
      If this happens, then an unfortuantely timed timer interrupt
      can try to activate the pagedir, but it is now freed memory */
   struct process* pcb_to_free = cur->pcb;
+
+  /* also close all fd in this process */
+  lock_acquire(&file_sys_lock);
+  for (int i = 2; i <= pcb_to_free->cur_fd; i++) {
+    struct file_descriptor* my_file_des = find_file_des(i);
+    if (my_file_des) {
+      file_close(my_file_des->file);
+      free(my_file_des);
+    }
+  }
+  lock_release(&file_sys_lock);
+
   cur->pcb = NULL;
   exit_setup(pcb_to_free);
   free(pcb_to_free);
