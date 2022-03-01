@@ -171,6 +171,18 @@ static void start_process(void* spaptr_) {
 
     success = load(file_name, &if_.eip, &if_.esp);
   }
+  
+  if(success) {
+    char* file_name_cpy = (char*)malloc(sizeof(char) * (strlen(file_name) + 1));
+    char* cpy_base = file_name_cpy;
+    strlcpy(file_name_cpy, file_name, strlen(file_name) + 1);
+    char** saveptr = &file_name_cpy;
+    char* prog_name = strtok_r(file_name_cpy, " ", saveptr);
+    struct file* file = filesys_open(prog_name);
+    t->pcb->curr_executable = file;
+    free(cpy_base);
+    file_deny_write(file);
+  }
 
   if(success) {
     /* Open executable file. */
@@ -302,6 +314,8 @@ void process_exit(void) {
     NOT_REACHED();
   }
 
+  file_close(cur->pcb->curr_executable);
+
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pcb->pagedir;
@@ -325,10 +339,6 @@ void process_exit(void) {
   struct process* pcb_to_free = cur->pcb;
 
   /* Close all the file descriptors */
-  /* Wrong one!!! Halt in internal list_remove() call */
-  // while (!list_empty(&(pcb_to_free->file_descriptor_table))) {
-  //   list_pop_back(&(pcb_to_free->file_descriptor_table));
-  // }
   while (!list_empty(&pcb_to_free->file_descriptor_table)) {
     struct list_elem *e = list_pop_front(&pcb_to_free->file_descriptor_table);
     // size_t size = list_size(&pcb_to_free->file_descriptor_table);
@@ -515,20 +525,13 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
     goto done;
   process_activate();
 
-  /* Open executable file. */
-  char* file_name_cpy = (char*) malloc(sizeof(char) * (strlen(file_name) + 1));
-  char* cpy_base = file_name_cpy;
-  strlcpy(file_name_cpy, file_name, strlen(file_name) + 1);
-  char** saveptr = &file_name_cpy;
-  char* prog_name = strtok_r(file_name_cpy, " ", saveptr);
-  file = filesys_open(prog_name);
-  free(cpy_base);
+  file = filesys_open(t->pcb->process_name);
+
   if (file == NULL) {
     printf("load: %s: open failed\n", file_name);
     goto done;
   }
-  // file_deny_write(file);
-  
+
   /* Read and verify executable header. */
   if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr ||
       memcmp(ehdr.e_ident, "\177ELF\1\1\1", 7) || ehdr.e_type != 2 || ehdr.e_machine != 3 ||
