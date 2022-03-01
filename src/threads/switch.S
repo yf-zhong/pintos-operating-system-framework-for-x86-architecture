@@ -46,8 +46,8 @@ switch_threads:
 	movl (%ecx,%edx,1), %esp
 
 	# Restore FPU registers.
-   FRSTOR (%esp)
-   addl $108, %esp
+	FRSTOR (%esp)
+	addl $108, %esp
 
 	# Restore caller's register state.
 	popl %edi
