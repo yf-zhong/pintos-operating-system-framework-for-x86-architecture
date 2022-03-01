@@ -326,6 +326,8 @@ void process_exit(void) {
     free(list_entry(e, struct file_descriptor, elem));
   }
 
+  printf("%s: exit(%d)\n", pcb_to_free->process_name, pcb_to_free->curr_as_child->exit_status);
+
   cur->pcb = NULL;
   exit_setup(pcb_to_free);
   free(pcb_to_free);
@@ -516,7 +518,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
     printf("load: %s: open failed\n", file_name);
     goto done;
   }
-
+  file_deny_write(file);
   /* Read and verify executable header. */
   if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr ||
       memcmp(ehdr.e_ident, "\177ELF\1\1\1", 7) || ehdr.e_type != 2 || ehdr.e_machine != 3 ||
