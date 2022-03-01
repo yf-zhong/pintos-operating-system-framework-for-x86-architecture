@@ -21,15 +21,15 @@ typedef void (*pthread_fun)(void*);
 typedef void (*stub_fun)(pthread_fun, void*);
 
 typedef struct child {
-   pid_t pid;
-   struct semaphore exec_sema;
-   struct semaphore wait_sema;
-   int exit_status;
-   bool is_exited;
-   bool is_waiting;
-   int ref_cnt;
-   struct lock ref_lock;
-   struct list_elem elem;
+  pid_t pid;
+  struct semaphore exec_sema;
+  struct semaphore wait_sema;
+  int exit_status;
+  bool is_exited;
+  bool is_waiting;
+  int ref_cnt;
+  struct lock ref_lock;
+  struct list_elem elem;
 } CHILD;
 
 /* The process control block for a given process. Since
@@ -42,7 +42,6 @@ struct process {
   uint32_t* pagedir;          /* Page directory. */
   char process_name[16];      /* Name of the main thread */
   struct thread* main_thread; /* Pointer to main thread */
-  struct lock c_lock;
   struct list children;
   struct child* curr_as_child;
   char *file_name;
@@ -60,9 +59,9 @@ struct file_descriptor {
 
 // NEW_c has to come first so that 
 // FILE_NAME can have the remaining space
- typedef struct start_proc_arg {
-   struct child* new_c;
-   char* file_name;
+typedef struct start_proc_arg {
+  struct child* new_c;
+  char* file_name;
 } SPA;
 
 void userprog_init(void);

@@ -104,9 +104,7 @@ pid_t process_execute(const char* file_name) {
   sema_down(&spaptr->new_c->exec_sema);
   free(cpy_base);
   struct process* pcb = thread_current()->pcb;
-  lock_acquire(&pcb->c_lock);
   list_push_front(&pcb->children, &spaptr->new_c->elem);
-  lock_release(&pcb->c_lock);
   if (tid == TID_ERROR) {
     free_spa(spaptr);
   }
@@ -124,7 +122,6 @@ void t_pcb_init(struct thread* t, struct process *new_pcb, CHILD *new_c) {
   t->pcb = new_pcb;
   t->pcb->main_thread = t;
   strlcpy(t->pcb->process_name, t->name, sizeof t->name);
-  lock_init(&t->pcb->c_lock);
   list_init(&t->pcb->children);
   t->pcb->curr_as_child = new_c;
   if (new_c) {
@@ -185,6 +182,18 @@ static void start_process(void* spaptr_) {
     t->pcb->curr_executable = file;
     free(cpy_base);
     file_deny_write(file);
+  }
+
+  if(success) {
+    /* Open executable file. */
+    char* file_name_cpy = (char*) malloc(sizeof(char) * (strlen(file_name) + 1));
+    char* cpy_base = file_name_cpy;
+    strlcpy(file_name_cpy, file_name, strlen(file_name) + 1);
+    char** saveptr = &file_name_cpy;
+    char* prog_name = strtok_r(file_name_cpy, " ", saveptr);
+    struct file* myfile = filesys_open(prog_name);
+    file_deny_write(myfile);
+    free(cpy_base);
   }
 
   /* Handle failure with succesful PCB malloc. Must free the PCB */
