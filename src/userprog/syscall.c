@@ -246,8 +246,7 @@ void sys_tell(struct intr_frame* f, int fd) {
   lock_acquire(&file_sys_lock);
   struct file_descriptor* my_file_des = find_file_des(fd);
   if (my_file_des) {
-    file_tell(my_file_des->file);
-    f->eax = 0;
+    f->eax = file_tell(my_file_des->file);
     lock_release(&file_sys_lock);
     return;
   }

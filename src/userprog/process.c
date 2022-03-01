@@ -155,18 +155,6 @@ static void start_process(void* spaptr_) {
     // does not try to activate our uninitialized pagedir
     t_pcb_init(t, new_pcb, new_c);
   }
-
-  if(success) {
-    /* Open executable file. */
-    char* file_name_cpy = (char*) malloc(sizeof(char) * (strlen(file_name) + 1));
-    char* cpy_base = file_name_cpy;
-    strlcpy(file_name_cpy, file_name, strlen(file_name) + 1);
-    char** saveptr = &file_name_cpy;
-    char* prog_name = strtok_r(file_name_cpy, " ", saveptr);
-    struct file* myfile = filesys_open(prog_name);
-    file_deny_write(myfile);
-    free(cpy_base);
-  }
  
   /* Initialize interrupt frame and load executable. */
   if (success) {
@@ -185,6 +173,18 @@ static void start_process(void* spaptr_) {
     asm volatile("FRSTOR (%0)" : : "g"(&local_var) : "memory");
 
     success = load(file_name, &if_.eip, &if_.esp);
+  }
+
+  if(success) {
+    /* Open executable file. */
+    char* file_name_cpy = (char*) malloc(sizeof(char) * (strlen(file_name) + 1));
+    char* cpy_base = file_name_cpy;
+    strlcpy(file_name_cpy, file_name, strlen(file_name) + 1);
+    char** saveptr = &file_name_cpy;
+    char* prog_name = strtok_r(file_name_cpy, " ", saveptr);
+    struct file* myfile = filesys_open(prog_name);
+    file_deny_write(myfile);
+    free(cpy_base);
   }
 
   /* Handle failure with succesful PCB malloc. Must free the PCB */
