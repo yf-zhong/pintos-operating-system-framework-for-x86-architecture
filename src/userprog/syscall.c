@@ -13,6 +13,7 @@
 #include "userprog/pagedir.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
+#include "lib/float.h"
 
 static void syscall_handler(struct intr_frame*);
 
@@ -275,6 +276,16 @@ void sys_close(struct intr_frame* f, int fd) {
   return;
 }
 
+void sys_comp_e(struct intr_frame* f, int num) {
+  if (num <= 0) {
+    printf("n: %d is invalid.", num);
+    f->eax = -1;
+    return;
+  }
+  f->eax = sys_sum_to_e(num);
+  return;
+}
+
 static void syscall_handler(struct intr_frame* f UNUSED) {
   uint32_t* args = ((uint32_t*)f->esp);
 
@@ -405,6 +416,12 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     case SYS_CLOSE:
       sys_close(f, args[1]);
       break;
+
+    /* FPU ops */
+    case SYS_COMPUTE_E:
+      sys_comp_e(f, args[1]);
+      break;
+    
     default:
       f->eax = -1; /* If the NUMBER is not defined */
   }

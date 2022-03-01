@@ -15,6 +15,9 @@ void sys_seek(struct intr_frame*, int, unsigned);
 void sys_tell(struct intr_frame*, int);
 void sys_close(struct intr_frame*, int);
 
+/* FPU ops */
+void sys_comp_e(struct intr_frame*, int);
+
 /* Lock for the file system operation */
 struct lock file_sys_lock;
 

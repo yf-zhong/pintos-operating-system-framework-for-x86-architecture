@@ -21,6 +21,8 @@
 .func start
 .globl start
 start:
+# Initialize floating point unit registers.
+	FNINIT
 
 # The loader called into us with CS = 0x2000, SS = 0x0000, ESP = 0xf000,
 # but we should initialize the other segment registers.
