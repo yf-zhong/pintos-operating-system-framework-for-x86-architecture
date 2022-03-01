@@ -155,6 +155,18 @@ static void start_process(void* spaptr_) {
     // does not try to activate our uninitialized pagedir
     t_pcb_init(t, new_pcb, new_c);
   }
+
+  if(success) {
+    /* Open executable file. */
+    char* file_name_cpy = (char*) malloc(sizeof(char) * (strlen(file_name) + 1));
+    char* cpy_base = file_name_cpy;
+    strlcpy(file_name_cpy, file_name, strlen(file_name) + 1);
+    char** saveptr = &file_name_cpy;
+    char* prog_name = strtok_r(file_name_cpy, " ", saveptr);
+    struct file* myfile = filesys_open(prog_name);
+    file_deny_write(myfile);
+    free(cpy_base);
+  }
  
   /* Initialize interrupt frame and load executable. */
   if (success) {
@@ -518,7 +530,8 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
     printf("load: %s: open failed\n", file_name);
     goto done;
   }
-  file_deny_write(file);
+  // file_deny_write(file);
+  
   /* Read and verify executable header. */
   if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr ||
       memcmp(ehdr.e_ident, "\177ELF\1\1\1", 7) || ehdr.e_type != 2 || ehdr.e_machine != 3 ||
