@@ -61,7 +61,6 @@ void sys_halt() {
 }
 
 void sys_exec(struct intr_frame* f, const char* cmd_line) {
-  // check if cmd_line valid
   if (is_valid_str(cmd_line)) {
     f->eax = process_execute(cmd_line);
   }
@@ -78,14 +77,12 @@ void sys_wait(struct intr_frame* f, pid_t pid) {
 
 void sys_exit(struct intr_frame* f, int status) {
     f->eax = status;
-    // printf("%s: exit(%d) from sys_exit\n", thread_current()->pcb->process_name, status);
     struct process* pcb = thread_current()->pcb;
     pcb->curr_as_child->exit_status = status;
     process_exit();
 }
 
 void sys_create(struct intr_frame* f, const char* file, unsigned initial_size) {  
-  /* Todo: Argument validation */
   if (!is_valid_str(file)) {
     sys_exit(f, -1);
   }
@@ -101,7 +98,6 @@ void sys_create(struct intr_frame* f, const char* file, unsigned initial_size) {
 }
 
 void sys_remove(struct intr_frame* f, const char* file) {
-  // use filesys_remove(const char *name)
   if (!is_valid_str(file)) {
     sys_exit(f, -1);
   }
@@ -114,17 +110,15 @@ void sys_remove(struct intr_frame* f, const char* file) {
 }
 
 void sys_open(struct intr_frame* f, const char* file) {
-  // use filesys_open(const char *name)
   if (!is_valid_str(file)) {
     sys_exit(f, -1);
   }
-  // int flag;
   lock_acquire(&file_sys_lock);
   struct process* pcb = thread_current()->pcb;
-  // file_deny_write() necessary?
   struct file *new_file = filesys_open(file);
   if (!new_file) {
     f->eax = -1;
+    lock_release(&file_sys_lock);
     return;
   }
   struct file_descriptor *new_file_descriptor = (struct file_descriptor *) malloc(sizeof(struct file_descriptor));
@@ -132,13 +126,8 @@ void sys_open(struct intr_frame* f, const char* file) {
     lock_release(&file_sys_lock);
     sys_exit(f, -1);
   }
-  // new_file_descriptor->fd = list_size(pcb->file_descriptor_table) + 1;
-  new_file_descriptor->fd = pcb->cur_fd++; /* Alter 2, Alter 1 above, choose later */
+  new_file_descriptor->fd = pcb->cur_fd++;
   new_file_descriptor->file = new_file;
-  /* ref_cnt is commented out, no need */
-  // lock_acquire(&(pcb->ref_cnt_lock));
-  // int ref_cnt = 1;
-  // lock_release(&(pcb->ref_cnt_lock));
   list_push_back(&(pcb->file_descriptor_table) ,&(new_file_descriptor->elem));
   f->eax = new_file_descriptor->fd;
   lock_release(&file_sys_lock);
@@ -146,7 +135,6 @@ void sys_open(struct intr_frame* f, const char* file) {
 }
 
 void sys_filesize(struct intr_frame* f, int fd) {
-  // use file_length(struct file*)
   if (fd <= 1) {
     sys_exit(f, -1);
   }
@@ -172,13 +160,11 @@ void sys_read(struct intr_frame* f, int fd, void* buffer, unsigned size) {
   }
   off_t number_read = 0;
   if (fd == 0) {
-    /* Do we need a for loop here to read file buffer? */
     for (unsigned i = 0; i < size; i++) {
       number_read += input_getc();
     }
     return;
   } else if (fd == 1 || fd < 0) {
-    // printf("fd: %d can't be read.", fd);
     sys_exit(f, -1);
   }
   lock_acquire(&file_sys_lock);
@@ -267,7 +253,7 @@ void sys_close(struct intr_frame* f, int fd) {
     file_close(my_file_des->file);
     f->eax = 0;
     list_remove(&my_file_des->elem);
-    // free(list_entry(&my_file_des->elem, struct file_descriptor, elem));
+    free(list_entry(&my_file_des->elem, struct file_descriptor, elem));
     lock_release(&file_sys_lock);
     return;
   }
@@ -327,31 +313,9 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       num_args = 0;
   }
 
-  // if (!is_user_vaddr((uint32_t) &args[0] + num_args * 4)) {
-  //   sys_exit(f, -1);
-  // }
   if (!is_user_vaddr(args + num_args)) {
     sys_exit(f, -1);
   }
-  // int num_args = 0;
-  // switch(args[0]) {
-  //   case SYS_WRITE: case SYS_READ:
-  //     num_args = 3;
-  //     break;
-  //   case SYS_CREATE: case SYS_SEEK:
-  //     num_args = 2;
-  //     break;
-  //   default:
-  //     num_args = 1;
-  //     break;
-  // }
-  // for (int i = 0; i <= num_args; i++) {
-  //   if (!is_valid_addr((uint32_t) &args[i])) {
-  //     f->eax = -1;
-  //     printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
-  //     process_exit();
-  //   }
-  // }
 
   switch(args[0]) {
     case SYS_PRACTICE:
@@ -378,24 +342,24 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       if ((sizeof(char*) - 1) & (unsigned long) &args[1]) {
         sys_exit(f, -1);
       }
-      sys_create(f, (const char*) args[1], args[2]);  /* Revision */
+      sys_create(f, (const char*) args[1], args[2]);
       break;
     case SYS_REMOVE:
       if ((sizeof(char*) - 1) & (unsigned long) &args[1]) {
         sys_exit(f, -1);
       }
-      sys_remove(f, (const char*) args[1]);  /* Revision, no local test provided */
+      sys_remove(f, (const char*) args[1]);
       break;
     case SYS_OPEN:
       if ((sizeof(char*) - 1) & (unsigned long) &args[1]) {
         sys_exit(f, -1);
       }
-      sys_open(f, (const char*) args[1]);                  /* Done! Wooohoooooo */
+      sys_open(f, (const char*) args[1]);
       break;
-    case SYS_FILESIZE:                  /* Revision (may) needed, no local test provided */
+    case SYS_FILESIZE:
       sys_filesize(f, args[1]);
       break;
-    case SYS_READ:                                  /* Done */
+    case SYS_READ:
       if ((sizeof(void*) - 1) & (unsigned long) &args[2]) {
         sys_exit(f, -1);
       }
@@ -405,7 +369,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       if ((sizeof(void*) - 1) & (unsigned long) &args[2]) {
         sys_exit(f, -1);
       }
-      sys_write(f, args[1], (const void*) args[2], args[3]);   /* Revision needed */
+      sys_write(f, args[1], (const void*) args[2], args[3]);
       break;
     case SYS_SEEK:
       sys_seek(f, args[1], args[2]);

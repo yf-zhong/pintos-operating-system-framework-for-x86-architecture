@@ -104,9 +104,9 @@ pid_t process_execute(const char* file_name) {
   sema_down(&spaptr->new_c->exec_sema);
   free(cpy_base);
   struct process* pcb = thread_current()->pcb;
-  lock_acquire(&pcb->c_lock);
+  // lock_acquire(&pcb->c_lock);
   list_push_front(&pcb->children, &spaptr->new_c->elem);
-  lock_release(&pcb->c_lock);
+  // lock_release(&pcb->c_lock);
   if (tid == TID_ERROR) {
     free_spa(spaptr);
   }
@@ -124,7 +124,7 @@ void t_pcb_init(struct thread* t, struct process *new_pcb, CHILD *new_c) {
   t->pcb = new_pcb;
   t->pcb->main_thread = t;
   strlcpy(t->pcb->process_name, t->name, sizeof t->name);
-  lock_init(&t->pcb->c_lock);
+  // lock_init(&t->pcb->c_lock);
   list_init(&t->pcb->children);
   t->pcb->curr_as_child = new_c;
   if (new_c) {
@@ -174,19 +174,18 @@ static void start_process(void* spaptr_) {
 
     success = load(file_name, &if_.eip, &if_.esp);
   }
-
-  // if(success) {
-  //   /* Open executable file. */
-  //   // char* file_name_cpy = (char*) malloc(sizeof(char) * (strlen(file_name) + 1));
-  //   // char* cpy_base = file_name_cpy;
-  //   // strlcpy(file_name_cpy, file_name, strlen(file_name) + 1);
-  //   // char** saveptr = &file_name_cpy;
-  //   // char* prog_name = strtok_r(file_name_cpy, " ", saveptr);
-  //   // struct file* myfile = filesys_open(prog_name);
-  //   // file_deny_write(myfile);
-  //   // free(cpy_base);
-  //   file_deny_write(filesys_open(file_name));
-  // }
+  
+  if(success) {
+    char* file_name_cpy = (char*)malloc(sizeof(char) * (strlen(file_name) + 1));
+    char* cpy_base = file_name_cpy;
+    strlcpy(file_name_cpy, file_name, strlen(file_name) + 1);
+    char** saveptr = &file_name_cpy;
+    char* prog_name = strtok_r(file_name_cpy, " ", saveptr);
+    struct file* file = filesys_open(prog_name);
+    t->pcb->curr_executable = file;
+    free(cpy_base);
+    file_deny_write(file);
+  }
 
   /* Handle failure with succesful PCB malloc. Must free the PCB */
   if (!success && pcb_success) {
@@ -306,6 +305,9 @@ void process_exit(void) {
     NOT_REACHED();
   }
 
+  file_close(cur->pcb->curr_executable);
+  // file_deny_write(file);
+
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pcb->pagedir;
@@ -329,21 +331,10 @@ void process_exit(void) {
   struct process* pcb_to_free = cur->pcb;
 
   /* Close all the file descriptors */
-  /* Wrong one!!! Halt in internal list_remove() call */
-  // while (!list_empty(&(pcb_to_free->file_descriptor_table))) {
-  //   list_pop_back(&(pcb_to_free->file_descriptor_table));
-  // }
-  // while (!list_empty(&pcb_to_free->file_descriptor_table)) {
-  //   struct list_elem *e = list_pop_front(&pcb_to_free->file_descriptor_table);
-  //   // size_t size = list_size(&pcb_to_free->file_descriptor_table);
-  //   free(list_entry(e, struct file_descriptor, elem));
-  // }
-  struct list_elem *e = list_begin(&pcb_to_free->file_descriptor_table);
-  struct list_elem *next_e;
-  while (e != list_end(&pcb_to_free->file_descriptor_table)) {
-    next_e = list_next(e);
+  while (!list_empty(&pcb_to_free->file_descriptor_table)) {
+    struct list_elem *e = list_pop_front(&pcb_to_free->file_descriptor_table);
+    // size_t size = list_size(&pcb_to_free->file_descriptor_table);
     free(list_entry(e, struct file_descriptor, elem));
-    e = next_e;
   }
 
   printf("%s: exit(%d)\n", pcb_to_free->process_name, pcb_to_free->curr_as_child->exit_status);
@@ -526,8 +517,17 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
     goto done;
   process_activate();
 
+
   /* Open executable file. */
-  file = filesys_open(t->pcb->process_name);
+  // file = filesys_open(file_name);
+
+  char* file_name_cpy = (char*) malloc(sizeof(char) * (strlen(file_name) + 1));
+  char* cpy_base = file_name_cpy;
+  strlcpy(file_name_cpy, file_name, strlen(file_name) + 1);
+  char** saveptr = &file_name_cpy;
+  char* prog_name = strtok_r(file_name_cpy, " ", saveptr);
+  file = filesys_open(prog_name);
+  free(cpy_base);
   if (file == NULL) {
     printf("load: %s: open failed\n", file_name);
     goto done;
