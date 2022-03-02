@@ -267,6 +267,7 @@ void sys_close(struct intr_frame* f, int fd) {
     file_close(my_file_des->file);
     f->eax = 0;
     list_remove(&my_file_des->elem);
+    // free(list_entry(&my_file_des->elem, struct file_descriptor, elem));
     lock_release(&file_sys_lock);
     return;
   }
