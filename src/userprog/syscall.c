@@ -113,23 +113,22 @@ void sys_open(struct intr_frame* f, const char* file) {
   if (!is_valid_str(file)) {
     sys_exit(f, -1);
   }
-  lock_acquire(&file_sys_lock);
   struct process* pcb = thread_current()->pcb;
+  lock_acquire(&file_sys_lock);
   struct file *new_file = filesys_open(file);
+  lock_release(&file_sys_lock);
   if (!new_file) {
     f->eax = -1;
     return;
   }
   struct file_descriptor *new_file_descriptor = (struct file_descriptor *) malloc(sizeof(struct file_descriptor));
   if (!new_file_descriptor) {
-    lock_release(&file_sys_lock);
     sys_exit(f, -1);
   }
   new_file_descriptor->fd = pcb->cur_fd++;
   new_file_descriptor->file = new_file;
   list_push_back(&(pcb->file_descriptor_table) ,&(new_file_descriptor->elem));
   f->eax = new_file_descriptor->fd;
-  lock_release(&file_sys_lock);
   return;
 }
 
