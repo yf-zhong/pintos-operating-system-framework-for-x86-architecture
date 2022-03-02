@@ -104,7 +104,9 @@ pid_t process_execute(const char* file_name) {
   sema_down(&spaptr->new_c->exec_sema);
   free(cpy_base);
   struct process* pcb = thread_current()->pcb;
+  // lock_acquire(&pcb->c_lock);
   list_push_front(&pcb->children, &spaptr->new_c->elem);
+  // lock_release(&pcb->c_lock);
   if (tid == TID_ERROR) {
     free_spa(spaptr);
   }
@@ -122,6 +124,7 @@ void t_pcb_init(struct thread* t, struct process *new_pcb, CHILD *new_c) {
   t->pcb = new_pcb;
   t->pcb->main_thread = t;
   strlcpy(t->pcb->process_name, t->name, sizeof t->name);
+  // lock_init(&t->pcb->c_lock);
   list_init(&t->pcb->children);
   t->pcb->curr_as_child = new_c;
   if (new_c) {
@@ -182,18 +185,6 @@ static void start_process(void* spaptr_) {
     t->pcb->curr_executable = file;
     free(cpy_base);
     file_deny_write(file);
-  }
-
-  if(success) {
-    /* Open executable file. */
-    char* file_name_cpy = (char*) malloc(sizeof(char) * (strlen(file_name) + 1));
-    char* cpy_base = file_name_cpy;
-    strlcpy(file_name_cpy, file_name, strlen(file_name) + 1);
-    char** saveptr = &file_name_cpy;
-    char* prog_name = strtok_r(file_name_cpy, " ", saveptr);
-    struct file* myfile = filesys_open(prog_name);
-    file_deny_write(myfile);
-    free(cpy_base);
   }
 
   /* Handle failure with succesful PCB malloc. Must free the PCB */
@@ -315,6 +306,7 @@ void process_exit(void) {
   }
 
   file_close(cur->pcb->curr_executable);
+  // file_deny_write(file);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -525,13 +517,24 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
     goto done;
   process_activate();
 
-  file = filesys_open(t->pcb->process_name);
+
+  /* Open executable file. */
+  // file = filesys_open(file_name);
+
+  char* file_name_cpy = (char*) malloc(sizeof(char) * (strlen(file_name) + 1));
+  char* cpy_base = file_name_cpy;
+  strlcpy(file_name_cpy, file_name, strlen(file_name) + 1);
+  char** saveptr = &file_name_cpy;
+  char* prog_name = strtok_r(file_name_cpy, " ", saveptr);
+  file = filesys_open(prog_name);
+  free(cpy_base);
 
   if (file == NULL) {
     printf("load: %s: open failed\n", file_name);
     goto done;
   }
-
+  // file_deny_write(file);
+  
   /* Read and verify executable header. */
   if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr ||
       memcmp(ehdr.e_ident, "\177ELF\1\1\1", 7) || ehdr.e_type != 2 || ehdr.e_machine != 3 ||
