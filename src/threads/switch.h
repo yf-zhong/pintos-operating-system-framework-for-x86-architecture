@@ -5,7 +5,7 @@
 /* switch_thread()'s stack frame. */
 struct switch_threads_frame {
 
-  uint8_t fpu[108];    /* 28: Saved FPU registers */
+  uint8_t fpu[108];    /* Saved FPU registers */
 
   uint32_t edi;        /*  0: Saved %edi. */
   uint32_t esi;        /*  4: Saved %esi. */
