@@ -243,9 +243,12 @@ static void thread_enqueue(struct thread* t) {
   ASSERT(intr_get_level() == INTR_OFF);
   ASSERT(is_thread(t));
 
-  if (active_sched_policy == SCHED_FIFO)
+  if (active_sched_policy == SCHED_FIFO) {
     list_push_back(&fifo_ready_list, &t->elem);
-  else
+  } else if (active_sched_policy == SCHED_PRIO) {
+    list_push_back(&fifo_ready_list, &t->elem);
+    thread_yield();
+  }
     PANIC("Unimplemented scheduling policy value: %d", active_sched_policy);
 }
 
@@ -336,8 +339,26 @@ void thread_foreach(thread_action_func* func, void* aux) {
   }
 }
 
+int max(int a, int b) {
+  return a > b ? a : b;
+}
+
 /* Sets the current thread's priority to NEW_PRIORITY. */
-void thread_set_priority(int new_priority) { thread_current()->base_priority = new_priority; }
+void thread_set_priority(int new_priority) {
+  struct thread* t = thread_current();
+  t->base_priority = new_priority; 
+  int highest_lock_priority = PRI_MIN;
+  // get highest lock priority
+  for (struct list_elem* e = list_begin(&t->holding_locks); 
+      e != list_end(&t->holding_locks); e = list_next(e)) {
+    struct lock* l = list_entry(e, struct lock, elem);
+    highest_lock_priority = max(highest_lock_priority, l->semaphore.highest_priority);
+  }
+  // set t->priority to highest priority among 
+  // t->base_priority and the highest priorities of all holding locks
+  t->priority = max(t->base_priority, highest_lock_priority);
+  thread_yield();
+}
 
 /* Returns the current thread's priority. */
 int thread_get_priority(void) { return thread_current()->priority; }
@@ -471,7 +492,19 @@ static struct thread* thread_schedule_fifo(void) {
 
 /* Strict priority scheduler */
 static struct thread* thread_schedule_prio(void) {
-  PANIC("Unimplemented scheduler policy: \"-sched=prio\"");
+  struct list_elem* result_e = list_begin(&fifo_ready_list);
+  struct thread* result = list_entry(e, struct thread, elem);
+  
+  struct list_elem* e;
+  for (e = list_begin(&fifo_ready_list); e != list_end(&fifo_ready_list); e = list_next(e)) {
+    struct thread* cur = list_entry(*e, struct thead, elem);
+    if (cur->priority > result->priority) {
+      result = cur;
+      result_e = cur->elem;
+    }
+  }
+  list_remove(e);
+  return result;
 }
 
 /* Fair priority scheduler */
