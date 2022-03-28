@@ -243,9 +243,12 @@ static void thread_enqueue(struct thread* t) {
   ASSERT(intr_get_level() == INTR_OFF);
   ASSERT(is_thread(t));
 
-  if (active_sched_policy == SCHED_FIFO)
+  if (active_sched_policy == SCHED_FIFO) {
     list_push_back(&fifo_ready_list, &t->elem);
-  else
+  } else if (active_sched_policy == SCHED_PRIO) {
+    list_push_back(&fifo_ready_list, &t->elem);
+    thread_yield();
+  }
     PANIC("Unimplemented scheduling policy value: %d", active_sched_policy);
 }
 
@@ -471,7 +474,19 @@ static struct thread* thread_schedule_fifo(void) {
 
 /* Strict priority scheduler */
 static struct thread* thread_schedule_prio(void) {
-  PANIC("Unimplemented scheduler policy: \"-sched=prio\"");
+  struct list_elem* result_e = list_begin(&fifo_ready_list);
+  struct thread* result = list_entry(e, struct thread, elem);
+  
+  struct list_elem* e;
+  for (e = list_begin(&fifo_ready_list); e != list_end(&fifo_ready_list); e = list_next(e)) {
+    struct thread* cur = list_entry(*e, struct thead, elem);
+    if (cur->priority > result->priority) {
+      result = cur;
+      result_e = cur->elem;
+    }
+  }
+  list_remove(e);
+  return result;
 }
 
 /* Fair priority scheduler */
