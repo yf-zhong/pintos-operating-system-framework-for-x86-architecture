@@ -92,7 +92,7 @@ bool sema_try_down(struct semaphore* sema) {
   return success;
 }
 
-struct thread* find_highest_thread() {
+struct thread* find_highest_thread(struct semaphore* sema) {
   struct thread* highest_thread = list_entry(list_front(&sema->waiters), struct thread, elem);
   struct list_elem* e;
   for (e = list_begin(&sema->waiters); e != list_end(&sema->waiters); e = list_next(e)) {
@@ -116,7 +116,7 @@ void sema_up(struct semaphore* sema) {
   if (!list_empty(&sema->waiters)) {
 
     /* Modified for Project 2 task 2 */
-    thread_unblock(find_highest_thread());
+    thread_unblock(find_highest_thread(sema));
   }
   sema->value++;
   intr_set_level(old_level);
@@ -234,7 +234,7 @@ void lock_release(struct lock* lock) {
   struct thread* t = thread_current();
   list_remove(&lock->elem);
   t->priority = find_highest_priority();
-  struct thread *highest_thread = find_highest_thread();
+  struct thread *highest_thread = find_highest_thread(&lock->semaphore);
   highest_thread->waiting_lock = NULL;
   list_push_back(&highest_thread->holding_locks, &lock->elem);
   thread_unblock(highest_thread);
@@ -402,11 +402,11 @@ void cond_broadcast(struct condition* cond, struct lock* lock) {
 
 /* Recursive helper: update a thread's priority given a new priority value. */
 void update_holder_priority(struct thread *t, int pri) {
-  if (t->effective_priority >= pri) {
+  if (t->priority >= pri) {
     return;
   }
 
-  t->effective_priority = pri;
+  t->priority = pri;
   if (t->waiting_lock != NULL) {
     update_lock_priority(t->waiting_lock, pri);
   }

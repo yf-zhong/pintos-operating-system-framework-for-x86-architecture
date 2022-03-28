@@ -346,6 +346,7 @@ int max(int a, int b) {
 int find_highest_priority(void){
   int highest_lock_priority = PRI_MIN;
   // get highest lock priority
+  struct thread *t = thread_current();
   for (struct list_elem* e = list_begin(&t->holding_locks); e != list_end(&t->holding_locks);
        e = list_next(e)) {
     struct lock* l = list_entry(e, struct lock, elem);
@@ -496,14 +497,14 @@ static struct thread* thread_schedule_fifo(void) {
 /* Strict priority scheduler */
 static struct thread* thread_schedule_prio(void) {
   struct list_elem* result_e = list_begin(&fifo_ready_list);
-  struct thread* result = list_entry(e, struct thread, elem);
+  struct thread* result = list_entry(result_e, struct thread, elem);
   
   struct list_elem* e;
   for (e = list_begin(&fifo_ready_list); e != list_end(&fifo_ready_list); e = list_next(e)) {
-    struct thread* cur = list_entry(e, struct thead, elem);
+    struct thread* cur = list_entry(e, struct thread, elem);
     if (cur->priority > result->priority) {
       result = cur;
-      result_e = cur->elem;
+      result_e = &cur->elem;
     }
   }
   list_remove(e);
