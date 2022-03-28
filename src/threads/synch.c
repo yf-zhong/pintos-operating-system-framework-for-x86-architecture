@@ -188,7 +188,7 @@ void lock_acquire(struct lock* lock) {
   ASSERT(!intr_context());
   ASSERT(!lock_held_by_current_thread(lock));
 
-  enum intr_level old_level;
+  enum intr_level old_level = intr_disable();
   struct thread* t = thread_current();
   
   if (lock->semaphore.value > 0) { // acquire success
