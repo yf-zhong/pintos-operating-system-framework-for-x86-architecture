@@ -340,7 +340,7 @@ void thread_foreach(thread_action_func* func, void* aux) {
 void thread_set_priority(int new_priority) { thread_current()->base_priority = new_priority; }
 
 /* Returns the current thread's priority. */
-int thread_get_priority(void) { return thread_current()->effective_priority; }
+int thread_get_priority(void) { return thread_current()->priority; }
 
 /* Sets the current thread's nice value to NICE. */
 void thread_set_nice(int nice UNUSED) { /* Not yet implemented. */
@@ -441,7 +441,7 @@ static void init_thread(struct thread* t, const char* name, int priority) {
 
   /* project 2 task 2 */
   t->base_priority = priority;
-  t->effective_priority = priority;
+  t->priority = priority;
   list_init(&t->holding_locks);
   t->waiting_lock = NULL;
 

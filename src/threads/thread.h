@@ -94,7 +94,7 @@ struct thread {
 
 
   /* for project 2 task 2: strict priority scheduler */
-  int effective_priority;
+  int priority;
   int base_priority;
   struct list holding_locks;
   struct lock *waiting_lock;
