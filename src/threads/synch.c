@@ -356,3 +356,25 @@ void cond_broadcast(struct condition* cond, struct lock* lock) {
   while (!list_empty(&cond->waiters))
     cond_signal(cond, lock);
 }
+
+/* Recursive helper: update a thread's priority given a new priority value. */
+void update_holder_priority(struct thread *t, int pri) {
+  if (t->effective_priority >= pri) {
+    return;
+  }
+
+  t->effective_priority = pri;
+  if (t->waiting_lock != NULL) {
+    update_lock_priority(t->waiting_lock, pri);
+  }
+}
+
+/* Recursive helper: update a lock's priority given a new priority value. */
+void update_lock_priority(struct lock *l, int pri) {
+  if (l->semaphore.highest_priority >= pri) {
+    return;
+  }
+
+  l->semaphore.highest_priority = pri;
+  update_holder_priority(l->holder, pri);
+}
