@@ -500,7 +500,7 @@ static struct thread* thread_schedule_prio(void) {
   
   struct list_elem* e;
   for (e = list_begin(&fifo_ready_list); e != list_end(&fifo_ready_list); e = list_next(e)) {
-    struct thread* cur = list_entry(*e, struct thead, elem);
+    struct thread* cur = list_entry(e, struct thead, elem);
     if (cur->priority > result->priority) {
       result = cur;
       result_e = cur->elem;
