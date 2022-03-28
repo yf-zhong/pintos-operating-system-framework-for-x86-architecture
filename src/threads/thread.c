@@ -343,20 +343,23 @@ int max(int a, int b) {
   return a > b ? a : b;
 }
 
+int find_highest_priority(void){
+  int highest_lock_priority = PRI_MIN;
+  // get highest lock priority
+  for (struct list_elem* e = list_begin(&t->holding_locks); e != list_end(&t->holding_locks);
+       e = list_next(e)) {
+    struct lock* l = list_entry(e, struct lock, elem);
+    highest_lock_priority = max(highest_lock_priority, l->semaphore.highest_priority);
+  }
+  return max(t->base_priority, highest_lock_priority);
+}
+
+
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void thread_set_priority(int new_priority) {
   struct thread* t = thread_current();
   t->base_priority = new_priority; 
-  int highest_lock_priority = PRI_MIN;
-  // get highest lock priority
-  for (struct list_elem* e = list_begin(&t->holding_locks); 
-      e != list_end(&t->holding_locks); e = list_next(e)) {
-    struct lock* l = list_entry(e, struct lock, elem);
-    highest_lock_priority = max(highest_lock_priority, l->semaphore.highest_priority);
-  }
-  // set t->priority to highest priority among 
-  // t->base_priority and the highest priorities of all holding locks
-  t->priority = max(t->base_priority, highest_lock_priority);
+  t->priority = find_highest_priority();
   thread_yield();
 }
 

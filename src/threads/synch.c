@@ -92,6 +92,17 @@ bool sema_try_down(struct semaphore* sema) {
   return success;
 }
 
+struct thread* find_highest_thread() {
+  struct thread* highest_thread = list_entry(list_front(&sema->waiters), struct thread, elem);
+  struct list_elem* e;
+  for (e = list_begin(&sema->waiters); e != list_end(&sema->waiters); e = list_next(e)) {
+    struct thread* t = list_entry(e, struct thread, elem);
+    if (t->priority > highest_thread->priority)
+      highest_thread = t;
+  }
+  return highest_thread;
+}
+
 /* Up or "V" operation on a semaphore.  Increments SEMA's value
    and wakes up one thread of those waiting for SEMA, if any.
 
@@ -217,7 +228,14 @@ void lock_release(struct lock* lock) {
   ASSERT(lock != NULL);
   ASSERT(lock_held_by_current_thread(lock));
 
-  lock->holder = NULL;
+  struct thread* t = thread_current();
+  list_remove(lock->elem);
+  t->priority = find_highest_priority();
+  struct thread *highest_thread = find_highest_thread();
+  highest_thread->waiting_lock = NULL;
+  list_push_back(&highest_thread->holding_locks, &lock->elem);
+  thread_unblock(highest_thread);
+  lock->holder = highest_thread;
   sema_up(&lock->semaphore);
 }
 
