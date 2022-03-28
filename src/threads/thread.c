@@ -337,10 +337,10 @@ void thread_foreach(thread_action_func* func, void* aux) {
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
-void thread_set_priority(int new_priority) { thread_current()->priority = new_priority; }
+void thread_set_priority(int new_priority) { thread_current()->base_priority = new_priority; }
 
 /* Returns the current thread's priority. */
-int thread_get_priority(void) { return thread_current()->priority; }
+int thread_get_priority(void) { return thread_current()->effective_priority; }
 
 /* Sets the current thread's nice value to NICE. */
 void thread_set_nice(int nice UNUSED) { /* Not yet implemented. */
@@ -436,13 +436,23 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   t->status = THREAD_BLOCKED;
   strlcpy(t->name, name, sizeof t->name);
   t->stack = (uint8_t*)t + PGSIZE;
-  t->priority = priority;
   t->pcb = NULL;
   t->magic = THREAD_MAGIC;
+
+  /* project 2 task 2 */
+  t->base_priority = priority;
+  t->effective_priority = priority;
+  list_init(&t->holding_locks);
+  t->waiting_lock = NULL;
 
   old_level = intr_disable();
   list_push_back(&all_list, &t->allelem);
   intr_set_level(old_level);
+
+  /* project 2 task 2 */
+  if (t->effective_priority > thread_current()->effective_priority) {
+    thread_yield();
+  }
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
