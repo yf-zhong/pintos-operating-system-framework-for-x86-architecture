@@ -174,6 +174,17 @@ void lock_acquire(struct lock* lock) {
   ASSERT(!intr_context());
   ASSERT(!lock_held_by_current_thread(lock));
 
+  enum intr_level old_level;
+  struct thread* t = thread_current();
+  
+  if (lock->semaphore.value > 0) { // acquire success
+    lock->semaphore.highest_priority = t->priority;
+    list_push_back(&t->holding_locks, lock);
+  }
+  else { // acquire not success
+    t->waiting_lock = lock;
+    update_lock_priority(lock, t->priority);
+  }
   sema_down(&lock->semaphore);
   lock->holder = thread_current();
 }
