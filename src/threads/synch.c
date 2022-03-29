@@ -46,6 +46,7 @@ void sema_init(struct semaphore* sema, unsigned value) {
 
   sema->value = value;
   list_init(&sema->waiters);
+  sema->highest_priority = PRI_MIN;
 }
 
 /* Down or "P" operation on a semaphore.  Waits for SEMA's value
@@ -93,12 +94,15 @@ bool sema_try_down(struct semaphore* sema) {
 }
 
 struct thread* find_highest_thread(struct semaphore* sema) {
-  struct thread* highest_thread = list_entry(list_front(&sema->waiters), struct thread, elem);
+  struct thread* highest_thread = NULL;
+  int highest_priority = PRI_MIN;
   struct list_elem* e;
   for (e = list_begin(&sema->waiters); e != list_end(&sema->waiters); e = list_next(e)) {
     struct thread* t = list_entry(e, struct thread, elem);
-    if (t->priority > highest_thread->priority)
+    if (t->priority == highest_priority) {
       highest_thread = t;
+      highest_priority = t->priority;
+    }
   }
   return highest_thread;
 }
@@ -192,7 +196,7 @@ void lock_acquire(struct lock* lock) {
   struct thread* t = thread_current();
   
   if (lock->semaphore.value > 0) { // acquire success
-    lock->semaphore.highest_priority = t->priority;
+    t->priority = lock->semaphore.highest_priority;
     list_push_back(&t->holding_locks, &lock->elem);
   }
   else { // acquire not success
@@ -231,6 +235,8 @@ void lock_release(struct lock* lock) {
   ASSERT(lock != NULL);
   ASSERT(lock_held_by_current_thread(lock));
 
+  enum intr_level old_level = intr_disable();
+
   struct thread* t = thread_current();
   list_remove(&lock->elem);
   t->priority = find_highest_priority();
@@ -240,6 +246,9 @@ void lock_release(struct lock* lock) {
   thread_unblock(highest_thread);
   lock->holder = highest_thread;
   sema_up(&lock->semaphore);
+
+  intr_set_level(old_level);
+
 }
 
 /* Returns true if the current thread holds LOCK, false
