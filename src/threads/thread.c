@@ -249,7 +249,10 @@ static void thread_enqueue(struct thread* t) {
     list_push_back(&fifo_ready_list, &t->elem);
     thread_yield();
   }
+  else {
     PANIC("Unimplemented scheduling policy value: %d", active_sched_policy);
+  }
+    
 }
 
 /* Transitions a blocked thread T to the ready-to-run state.
