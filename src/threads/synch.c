@@ -69,6 +69,7 @@ void sema_down(struct semaphore* sema) {
     thread_block();
   }
   sema->value--;
+  sema->highest_priority = thread_current()->priority;
   intr_set_level(old_level);
 }
 
