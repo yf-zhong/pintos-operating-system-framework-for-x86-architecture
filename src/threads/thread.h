@@ -100,11 +100,9 @@ struct thread {
 
   /* For project 2 task 3: user thread */
   struct semaphore join_sema;      /* Default 0 when thread created */
-  struct semaphore* join_sema_ptr; /* Point to thread_joint() caller semaphore */
-  struct lock join_sema_ptr_lock;  /* Protect join_sema_ptr from data race */
-  void* userStack;
+  tid_t join_tid;                  /* Default -1 when no thread tries to join current thread */
+  void* userStack;  // ???
   struct list upage_list;
-  struct list_elem proc_elem;
 
 #ifdef USERPROG
   /* Owned by process.c. */
