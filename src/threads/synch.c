@@ -251,14 +251,12 @@ void lock_release(struct lock* lock) {
   if (highest_thread != NULL) {
     highest_thread->waiting_lock = NULL;
     list_push_back(&highest_thread->holding_locks, &lock->elem);
-    thread_unblock(highest_thread);
     lock->holder = highest_thread;
   }
   else {
     lock->holder = NULL;
-    sema_up(&lock->semaphore);
   }
-  
+  sema_up(&lock->semaphore);
   intr_set_level(old_level);
 
 }
