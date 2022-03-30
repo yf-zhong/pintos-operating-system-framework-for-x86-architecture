@@ -403,9 +403,11 @@ void cond_signal(struct condition* cond, struct lock* lock UNUSED) {
         highest_sema = se;
         highest_priority = highest_sema->semaphore.highest_priority;
       }
-        
     }
-    sema_up(&highest_sema->semaphore);
+    if (highest_sema != NULL) {
+      list_remove(&highest_sema->elem);
+      sema_up(&highest_sema->semaphore);
+    }
   }
 }
 
