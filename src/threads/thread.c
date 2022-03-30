@@ -248,7 +248,12 @@ static void thread_enqueue(struct thread* t) {
   } else if (active_sched_policy == SCHED_PRIO) {
     list_push_back(&fifo_ready_list, &t->elem);
     if (t->priority > thread_current()->priority) {
-      thread_yield();
+      if (intr_context()) {
+        intr_yield_on_return();
+      }
+      else {
+        thread_yield();
+      }
     }
   }
   else {
@@ -272,8 +277,9 @@ void thread_unblock(struct thread* t) {
 
   old_level = intr_disable();
   ASSERT(t->status == THREAD_BLOCKED);
-  thread_enqueue(t);
   t->status = THREAD_READY;
+  thread_enqueue(t);
+  
   intr_set_level(old_level);
 }
 
