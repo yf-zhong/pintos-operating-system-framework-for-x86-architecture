@@ -119,7 +119,6 @@ void sys_open(struct intr_frame* f, const char* file) {
   lock_release(&file_sys_lock);
   if (!new_file) {
     f->eax = -1;
-    lock_release(&file_sys_lock);
     return;
   }
   struct file_descriptor *new_file_descriptor = (struct file_descriptor *) malloc(sizeof(struct file_descriptor));

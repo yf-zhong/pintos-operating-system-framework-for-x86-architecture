@@ -124,7 +124,6 @@ void t_pcb_init(struct thread* t, struct process *new_pcb, CHILD *new_c) {
   t->pcb = new_pcb;
   t->pcb->main_thread = t;
   strlcpy(t->pcb->process_name, t->name, sizeof t->name);
-  // lock_init(&t->pcb->c_lock);
   list_init(&t->pcb->children);
   t->pcb->curr_as_child = new_c;
   if (new_c) {
@@ -176,14 +175,8 @@ static void start_process(void* spaptr_) {
   }
   
   if(success) {
-    // char* file_name_cpy = (char*)malloc(sizeof(char) * (strlen(file_name) + 1));
-    // char* cpy_base = file_name_cpy;
-    // strlcpy(file_name_cpy, file_name, strlen(file_name) + 1);
-    // char** saveptr = &file_name_cpy;
-    // char* prog_name = strtok_r(file_name_cpy, " ", saveptr);
     struct file* file = filesys_open(t->pcb->process_name);
     t->pcb->curr_executable = file;
-    // free(cpy_base);
     file_deny_write(file);
   }
 
@@ -526,7 +519,6 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
     printf("load: %s: open failed\n", file_name);
     goto done;
   }
-  file_deny_write(file);
   
   /* Read and verify executable header. */
   if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr ||
