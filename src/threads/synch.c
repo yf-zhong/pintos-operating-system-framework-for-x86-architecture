@@ -118,6 +118,7 @@ void sema_up(struct semaphore* sema) {
   ASSERT(sema != NULL);
 
   old_level = intr_disable();
+  sema->value++;
   struct thread* highest_thread = find_highest_thread(sema);
   if (!list_empty(&sema->waiters) && highest_thread != NULL) {
     /* Modified for Project 2 task 2 */
@@ -129,7 +130,6 @@ void sema_up(struct semaphore* sema) {
     }
     thread_unblock(highest_thread);
   }
-  sema->value++;
   intr_set_level(old_level);
 }
 
