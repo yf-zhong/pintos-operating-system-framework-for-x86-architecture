@@ -416,6 +416,28 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     case SYS_COMPUTE_E:
       sys_comp_e(f, args[1]);
       break;
+
+    /* For project 2 task 3 */
+    case SYS_PT_CREATE:    /* Creates a new thread */
+      break;
+    case SYS_PT_EXIT:       /* Exits the current thread */
+      break;
+    case SYS_PT_JOIN:       /* Waits for thread to finish */
+      break;
+    case SYS_LOCK_INIT:     /* Initializes a lock */
+      break;
+    case SYS_LOCK_ACQUIRE:  /* Acquires a lock */
+      break;
+    case SYS_LOCK_RELEASE:  /* Releases a lock */
+      break;
+    case SYS_SEMA_INIT:     /* Initializes a semaphore */
+      break;
+    case SYS_SEMA_DOWN:     /* Downs a semaphore */
+      break;
+    case SYS_SEMA_UP:       /* Ups a semaphore */
+      break;
+    case SYS_GET_TID:       /* Gets TID of the current thread */
+      break;
     
     default:
       f->eax = -1; /* If the NUMBER is not defined */
