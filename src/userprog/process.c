@@ -120,18 +120,31 @@ pid_t process_execute(const char* file_name) {
 }
 
 void t_pcb_init(struct thread* t, struct process *new_pcb, CHILD *new_c) {
+  struct process* t_pcb = t->pcb;
   new_pcb->pagedir = NULL;
-  t->pcb = new_pcb;
-  t->pcb->main_thread = t;
-  strlcpy(t->pcb->process_name, t->name, sizeof t->name);
-  list_init(&t->pcb->children);
-  t->pcb->curr_as_child = new_c;
+  t_pcb = new_pcb;
+  t_pcb->main_thread = t;
+  strlcpy(t_pcb->process_name, t->name, sizeof t->name);
+  list_init(&t_pcb->children);
+  t_pcb->curr_as_child = new_c;
   if (new_c) {
     new_c->pid = get_pid(new_pcb);
   }
   /* Initialize fd related structure member */
-  t->pcb->cur_fd = 2;
-  list_init(&t->pcb->file_descriptor_table);
+  t_pcb->cur_fd = 2;
+  list_init(&t_pcb->file_descriptor_table);
+
+  /* project 2 task 3 */
+  list_init(&t_pcb->thread_info_list);
+  for (int i = 0; i < CHAR_MAX + 1; i++) {
+    t_pcb->lock_table[i] = NULL;
+    t_pcb->sema_table[i] = NULL;
+  }
+  t_pcb->num_locks = 0;
+  t_pcb->num_semas = 0;
+  lock_init(&t_pcb->process_lock);
+  t_pcb->highest_upage = NULL;
+  t_pcb->is_exiting = false;
 }
 
 /* A thread function that loads a user process and starts it
@@ -775,7 +788,26 @@ static void start_pthread(void* exec_ UNUSED) {}
 
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. */
-tid_t pthread_join(tid_t tid UNUSED) { return -1; }
+tid_t pthread_join(tid_t tid UNUSED) {
+  struct list_elem* e;
+  struct thread_info* t_info = NULL;
+  struct list thread_info_list = thread_current()->pcb->thread_info_list;
+  for (e = list_begin(&thread_info_list); e != list_end(&thread_info_list); e = list_next(e)) {
+    struct thread_info *cur_info = list_entry(e, struct thread_info, proc_elem);
+    if (cur_info->tid == tid) {
+      t_info = cur_info;
+      break;
+    }
+  }
+  if (!t_info) {
+    return TID_ERROR;
+  }
+  if (t_info->is_exited) {
+    return tid;
+  }
+  sema_down(&t_info->t->join_sema);
+  return tid;
+}
 
 /* Free the current thread's resources. Most resources will
    be freed on thread_exit(), so all we have to do is deallocate the

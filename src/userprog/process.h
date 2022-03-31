@@ -62,8 +62,8 @@ struct process {
   struct lock *lock_table[CHAR_MAX + 1]; // an array to store all the locks for this process
   char num_locks;    
   struct semaphore *sema_table[CHAR_MAX + 1];// an array to store all the semaphores for this process
-  struct lock process_lock;
   char num_semas;
+  struct lock process_lock;
   void* highest_upage;
   bool is_exiting; // check everytime after switch_threads, if true, exit the current thread
 };
