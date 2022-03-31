@@ -136,10 +136,6 @@ void t_pcb_init(struct thread* t, struct process *new_pcb, CHILD *new_c) {
 
   /* project 2 task 3 */
   list_init(&t_pcb->thread_info_list);
-  for (int i = 0; i < CHAR_MAX + 1; i++) {
-    t_pcb->lock_table[i] = NULL;
-    t_pcb->sema_table[i] = NULL;
-  }
   t_pcb->num_locks = 0;
   t_pcb->num_semas = 0;
   lock_init(&t_pcb->process_lock);
