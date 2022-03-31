@@ -15,6 +15,10 @@
 #include "filesys/filesys.h"
 #include "lib/float.h"
 
+/* Synchronization Types */
+typedef char lock_t;
+typedef char sema_t;
+
 static void syscall_handler(struct intr_frame*);
 
 bool is_valid_addr(uint32_t);
@@ -46,8 +50,12 @@ struct lock file_sys_lock;
 void sys_pthread_create(struct intr_frame*, stub_fun, pthread_fun, const void*);
 void sys_pthread_exit(struct intr_frame*);
 void sys_pthread_join(struct intr_frame*, tid_t tid);
-void sys_lock_init(struct intr_frame*, struct lock*);
-void sys_lock_acquire(struct intr_frame*, struct lock*);
+void sys_lock_init(struct intr_frame*, lock_t*);
+void sys_lock_acquire(struct intr_frame*, lock_t*);
+void sys_lock_release(struct intr_frame*, lock_t*);
+void sys_sema_init(struct intr_frame*, sema_t*);
+void sys_sema_acquire(struct intr_frame*, sema_t*);
+void sys_sema_release(struct intr_frame*, sema_t*);
 void sys_get_tid(struct intr_frame* f);
 
 
@@ -295,6 +303,40 @@ void sys_comp_e(struct intr_frame* f, int num) {
   f->eax = sys_sum_to_e(num);
   return;
 }
+
+void sys_pthread_create(struct intr_frame* f, stub_fun sf, pthread_fun pf, const void *arg) {
+  f->eax = pthread_execute(sf, pf, arg);
+  return;
+}
+
+void sys_pthread_exit(struct intr_frame* f) {
+  struct thread* t = thread_current();
+  if (is_main_thread(t, t->pcb)) {
+    pthread_exit_main();
+  }
+  else {
+    pthread_exit();
+  }
+  return;
+}
+
+void sys_lock_init(struct intr_frame* f, lock_t* lock) {
+  struct process* pcb = thread_current()->pcb;
+  lock_acquire(&pcb->process_lock);
+  if (pcb->num_locks >= CHAR_MAX) {
+    f->eax = false;
+  }
+  else {
+    *lock = pcb->num_locks;
+    pcb->lock_table[*lock] = malloc(sizeof(struct lock));
+    lock_init(pcb->lock_table[*lock]);
+    pcb->num_locks++;
+    f->eax = true;
+  }
+  lock_release(&pcb->process_lock);
+  return;
+}
+
 
 /* For user thread */
 void sys_pthread_join(struct intr_frame* f, tid_t tid) {
