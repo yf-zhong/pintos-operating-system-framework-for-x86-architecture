@@ -43,9 +43,6 @@ void sys_close(struct intr_frame*, int);
 /* FPU ops */
 void sys_comp_e(struct intr_frame*, int);
 
-/* Lock for the file system operation */
-struct lock file_sys_lock;
-
 /* For part 2 task 3: user thread */
 void sys_pthread_create(struct intr_frame*, stub_fun, pthread_fun, void*);
 void sys_pthread_exit(struct intr_frame*);
@@ -342,17 +339,6 @@ void sys_lock_init(struct intr_frame* f, lock_t* lock) {
   return;
 }
 
-bool is_acquired_lock_after_l(lock_t* l) {
-  struct thread* t = thread_current();
-  struct process* pcb = t->pcb;
-  for (int i = *l; i < pcb->num_locks; i++) {
-    if (pcb->lock_table[i]->holder == t) {
-      return true;
-    }
-  }
-  return false;
-}
-
 void sys_lock_acquire(struct intr_frame* f, lock_t* lock) {
   if (*lock < 0 || *lock > CHAR_MAX) {
     sys_exit(f, -1);
@@ -360,7 +346,7 @@ void sys_lock_acquire(struct intr_frame* f, lock_t* lock) {
   struct thread* t = thread_current();
   struct process* pcb = t->pcb;
   lock_acquire(&pcb->process_lock);
-  if (is_acquired_lock_after_l(lock)) {
+  if ( *lock >= pcb->num_locks || pcb->lock_table[*lock]->holder == t) {
     f->eax = false;
   }
   else {
@@ -552,24 +538,43 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
     /* For project 2 task 3 */
     case SYS_PT_CREATE:    /* Creates a new thread */
+      sys_pthread_create(f, (stub_fun)args[1], (pthread_fun)args[2], (void *)args[3]);
       break;
     case SYS_PT_EXIT:       /* Exits the current thread */
+      sys_pthread_exit(f);
       break;
     case SYS_PT_JOIN:       /* Waits for thread to finish */
+      sys_pthread_join(f, args[1]);
       break;
     case SYS_LOCK_INIT:     /* Initializes a lock */
+      if (!is_valid_addr((uint32_t) &args[1])) {
+        sys_exit(f, -1);
+      }
+      sys_lock_init(f, (lock_t *)args[1]);
       break;
     case SYS_LOCK_ACQUIRE:  /* Acquires a lock */
+      if (!is_valid_addr((uint32_t) &args[1])) {
+        sys_exit(f, -1);
+      }
+      sys_lock_acquire(f, args[1]);
       break;
     case SYS_LOCK_RELEASE:  /* Releases a lock */
+      if (!is_valid_addr((uint32_t) &args[1])) {
+        sys_exit(f, -1);
+      }
+      sys_lock_release(f, args[1]);
       break;
     case SYS_SEMA_INIT:     /* Initializes a semaphore */
+      sys_sema_init(f, args[1], args[2]);
       break;
     case SYS_SEMA_DOWN:     /* Downs a semaphore */
+      sys_sema_down(f, (sema_t *)args[1]);
       break;
     case SYS_SEMA_UP:       /* Ups a semaphore */
+      sys_sema_up(f, (sema_t *)args[1]);
       break;
     case SYS_GET_TID:       /* Gets TID of the current thread */
+      sys_get_tid(f);
       break;
     
     default:

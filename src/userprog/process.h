@@ -17,6 +17,9 @@
    the TID of the main thread of the process */
 typedef tid_t pid_t;
 
+/* Lock for the file system operation */
+struct lock file_sys_lock;
+
 /* Thread functions (Project 2: Multithreading) */
 typedef void (*pthread_fun)(void*);
 typedef void (*stub_fun)(pthread_fun, void*);
