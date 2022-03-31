@@ -342,6 +342,53 @@ void sys_lock_init(struct intr_frame* f, lock_t* lock) {
   return;
 }
 
+bool is_acquired_lock_after_l(lock_t* l) {
+  struct thread* t = thread_current();
+  struct process* pcb = t->pcb;
+  for (int i = *l; i < pcb->num_locks; i++) {
+    if (pcb->lock_table[i]->holder == t) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void sys_lock_acquire(struct intr_frame* f, lock_t* lock) {
+  if (*lock < 0 || *lock > CHAR_MAX) {
+    sys_exit(f, -1);
+  }
+  struct thread* t = thread_current();
+  struct process* pcb = t->pcb;
+  lock_acquire(&pcb->process_lock);
+  if (is_acquired_lock_after_l(lock)) {
+    f->eax = false;
+  }
+  else {
+    lock_acquire(pcb->lock_table[*lock]);
+    f->eax = true;
+  }
+  lock_release(&pcb->process_lock);
+  return;
+}
+
+void sys_lock_release(struct intr_frame* f, lock_t* lock) {
+  if (*lock < 0 || *lock > CHAR_MAX) {
+    sys_exit(f, -1);
+  }
+  struct thread* t = thread_current();
+  struct process* pcb = t->pcb;
+  lock_acquire(&pcb->process_lock);
+  if (pcb->lock_table[*lock] == NULL || pcb->lock_table[*lock]->holder != t) {
+    f->eax = false;
+  }
+  else {
+    lock_release(pcb->lock_table[*lock]);
+    f->eax = true;
+  }
+  lock_release(&pcb->process_lock);
+  return;
+}
+
 void sys_sema_init(struct intr_frame* f, sema_t* sema, int val) {
   struct process* pcb = thread_current()->pcb;
   lock_acquire(&pcb->process_lock);
