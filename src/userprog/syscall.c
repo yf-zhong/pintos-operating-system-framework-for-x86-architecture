@@ -346,7 +346,7 @@ void sys_lock_acquire(struct intr_frame* f, lock_t* lock) {
   struct thread* t = thread_current();
   struct process* pcb = t->pcb;
   lock_acquire(&pcb->process_lock);
-  if ( *lock >= pcb->num_locks || pcb->lock_table[*lock]->holder == t) {
+  if ( *lock >= pcb->num_locks || pcb->lock_table[(int)*lock]->holder == t) {
     f->eax = false;
   }
   else {
@@ -556,16 +556,16 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       if (!is_valid_addr((uint32_t) &args[1])) {
         sys_exit(f, -1);
       }
-      sys_lock_acquire(f, args[1]);
+      sys_lock_acquire(f, (lock_t *)args[1]);
       break;
     case SYS_LOCK_RELEASE:  /* Releases a lock */
       if (!is_valid_addr((uint32_t) &args[1])) {
         sys_exit(f, -1);
       }
-      sys_lock_release(f, args[1]);
+      sys_lock_release(f, (lock_t *)args[1]);
       break;
     case SYS_SEMA_INIT:     /* Initializes a semaphore */
-      sys_sema_init(f, args[1], args[2]);
+      sys_sema_init(f, (sema_t *)args[1], args[2]);
       break;
     case SYS_SEMA_DOWN:     /* Downs a semaphore */
       sys_sema_down(f, (sema_t *)args[1]);
