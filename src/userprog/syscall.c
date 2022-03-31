@@ -328,7 +328,7 @@ void sys_pthread_join(struct intr_frame* f, tid_t tid) {
 void sys_lock_init(struct intr_frame* f, lock_t* lock) {
   struct process* pcb = thread_current()->pcb;
   lock_acquire(&pcb->process_lock);
-  if (pcb->num_locks >= CHAR_MAX) {
+  if (pcb->num_locks > CHAR_MAX) {
     f->eax = false;
   }
   else {
