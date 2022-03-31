@@ -65,6 +65,7 @@ struct process {
   struct lock process_lock;
   char num_semas;
   void* highest_upage;
+  bool is_exiting; // check everytime after switch_threads, if true, exit the current thread
 };
 
 /* One element in the file descriptor table */
