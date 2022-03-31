@@ -47,13 +47,13 @@ void sys_comp_e(struct intr_frame*, int);
 struct lock file_sys_lock;
 
 /* For part 2 task 3: user thread */
-void sys_pthread_create(struct intr_frame*, stub_fun, pthread_fun, const void*);
+void sys_pthread_create(struct intr_frame*, stub_fun, pthread_fun, void*);
 void sys_pthread_exit(struct intr_frame*);
 void sys_pthread_join(struct intr_frame*, tid_t tid);
 void sys_lock_init(struct intr_frame*, lock_t*);
 void sys_lock_acquire(struct intr_frame*, lock_t*);
 void sys_lock_release(struct intr_frame*, lock_t*);
-void sys_sema_init(struct intr_frame*, sema_t*);
+void sys_sema_init(struct intr_frame*, sema_t*, int);
 void sys_sema_acquire(struct intr_frame*, sema_t*);
 void sys_sema_release(struct intr_frame*, sema_t*);
 void sys_get_tid(struct intr_frame* f);
@@ -304,7 +304,7 @@ void sys_comp_e(struct intr_frame* f, int num) {
   return;
 }
 
-void sys_pthread_create(struct intr_frame* f, stub_fun sf, pthread_fun pf, const void *arg) {
+void sys_pthread_create(struct intr_frame* f, stub_fun sf, pthread_fun pf, void *arg) {
   f->eax = pthread_execute(sf, pf, arg);
   return;
 }
@@ -320,6 +320,11 @@ void sys_pthread_exit(struct intr_frame* f) {
   return;
 }
 
+void sys_pthread_join(struct intr_frame* f, tid_t tid) {
+  /* Any validation? */
+  f->eax = pthread_join(tid);
+}
+
 void sys_lock_init(struct intr_frame* f, lock_t* lock) {
   struct process* pcb = thread_current()->pcb;
   lock_acquire(&pcb->process_lock);
@@ -328,8 +333,8 @@ void sys_lock_init(struct intr_frame* f, lock_t* lock) {
   }
   else {
     *lock = pcb->num_locks;
-    pcb->lock_table[*lock] = malloc(sizeof(struct lock));
-    lock_init(pcb->lock_table[*lock]);
+    pcb->lock_table[(int) *lock] = malloc(sizeof(struct lock));
+    lock_init(pcb->lock_table[(int) *lock]);
     pcb->num_locks++;
     f->eax = true;
   }
@@ -337,13 +342,21 @@ void sys_lock_init(struct intr_frame* f, lock_t* lock) {
   return;
 }
 
-
-/* For user thread */
-void sys_pthread_join(struct intr_frame* f, tid_t tid) {
-  /* Any validation? */
-  f->eax = pthread_join(tid);
+void sys_sema_init(struct intr_frame* f, sema_t* sema, int val) {
+  struct process* pcb = thread_current()->pcb;
+  lock_acquire(&pcb->process_lock);
+  if (val < 0 || pcb->num_semas) {
+    f->eax = false;
+  } else {
+    *sema = pcb->num_semas;
+    pcb->sema_table[(int) *sema] = malloc(sizeof(sema));
+    sema_init(pcb->sema_table[(int) *sema], val);
+    pcb->num_semas++;
+    f->eax = true;
+  }
+  lock_release(&pcb->process_lock);
+  return;
 }
-
 
 static void syscall_handler(struct intr_frame* f UNUSED) {
   uint32_t* args = ((uint32_t*)f->esp);
