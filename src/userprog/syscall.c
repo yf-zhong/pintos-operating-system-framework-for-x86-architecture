@@ -54,8 +54,8 @@ void sys_lock_init(struct intr_frame*, lock_t*);
 void sys_lock_acquire(struct intr_frame*, lock_t*);
 void sys_lock_release(struct intr_frame*, lock_t*);
 void sys_sema_init(struct intr_frame*, sema_t*, int);
-void sys_sema_acquire(struct intr_frame*, sema_t*);
-void sys_sema_release(struct intr_frame*, sema_t*);
+void sys_sema_down(struct intr_frame*, sema_t*);
+void sys_sema_up(struct intr_frame*, sema_t*);
 void sys_get_tid(struct intr_frame* f);
 
 
@@ -402,6 +402,37 @@ void sys_sema_init(struct intr_frame* f, sema_t* sema, int val) {
     f->eax = true;
   }
   lock_release(&pcb->process_lock);
+  return;
+}
+
+void sys_sema_down(struct intr_frame* f, sema_t* sema) {
+  struct process* pcb = thread_current()->pcb;
+  lock_acquire(&pcb->process_lock);
+  if ((int) *sema < 0 || pcb->sema_table[(int) *sema] == NULL) {
+    f->eax = false;
+  } else {
+    sema_down(&pcb->sema_table[(int) *sema]);
+    f->eax = true;
+  }
+  lock_release(&pcb->process_lock);
+  return;
+}
+
+void sys_sema_up(struct intr_frame* f, sema_t* sema) {
+  struct process* pcb = thread_current()->pcb;
+  lock_acquire(&pcb->process_lock);
+  if ((int) *sema < 0 || pcb->sema_table[(int)*sema] == NULL) {
+    f->eax = false;
+  } else {
+    sema_up(&pcb->sema_table[(int)*sema]);
+    f->eax = true;
+  }
+  lock_release(&pcb->process_lock);
+  return;
+}
+
+void sys_get_tid(struct intr_frame* f) {
+  f->eax = thread_tid();
   return;
 }
 
