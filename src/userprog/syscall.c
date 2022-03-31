@@ -297,7 +297,7 @@ void sys_comp_e(struct intr_frame* f, int num) {
 }
 
 /* For user thread */
-void sys_pthread_join(struct intr_frame*, tid_t tid) {
+void sys_pthread_join(struct intr_frame* f, tid_t tid) {
   /* Any validation? */
   f->eax = pthread_join(tid);
 }
