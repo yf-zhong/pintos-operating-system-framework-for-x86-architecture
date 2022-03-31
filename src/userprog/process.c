@@ -774,7 +774,26 @@ static void start_pthread(void* exec_ UNUSED) {}
 
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. */
-tid_t pthread_join(tid_t tid UNUSED) { return -1; }
+tid_t pthread_join(tid_t tid UNUSED) {
+  struct list_elem* e;
+  struct thread_info* t_info = NULL;
+  struct list thread_info_list = thread_current()->pcb->thread_info_list;
+  for (e = list_begin(&thread_info_list); e != list_end(&thread_info_list); e = list_next(e)) {
+    struct thread_info *cur_info = list_entry(e, struct thread_info, proc_elem);
+    if (cur_info->tid == tid) {
+      t_info = cur_info;
+      break;
+    }
+  }
+  if (!t_info) {
+    return TID_ERROR;
+  }
+  if (t_info->is_exited) {
+    return tid;
+  }
+  sema_down(&t_info->t->join_sema);
+  return tid;
+}
 
 /* Free the current thread's resources. Most resources will
    be freed on thread_exit(), so all we have to do is deallocate the
