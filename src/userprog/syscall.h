@@ -21,5 +21,14 @@ void sys_comp_e(struct intr_frame*, int);
 /* Lock for the file system operation */
 struct lock file_sys_lock;
 
+/* For part 2 task 3: user thread */
+void sys_pthread_create(struct intr_frame*, stub_fun, pthread_fun, const void *);
+void sys_pthread_exit(struct intr_frame*);
+void sys_pthread_join(struct intr_frame*, tid_t tid);
+
+void sys_lock_init(struct intr_frame*, struct lock*);
+void sys_lock_acquire(struct intr_frame*, struct lock*);
+
+void sys_get_tid(struct intr_frame* f);
 
 #endif /* userprog/syscall.h */

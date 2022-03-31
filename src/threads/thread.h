@@ -92,12 +92,17 @@ struct thread {
   /* Shared between thread.c and synch.c. */
   struct list_elem elem; /* List element. */
 
-
-  /* for project 2 task 2: strict priority scheduler */
+  /* For project 2 task 2: strict priority scheduler */
   int priority;
   int base_priority;
   struct list holding_locks;
   struct lock *waiting_lock;
+
+  /* For project 2 task 3: user thread */
+  struct semaphore join_sema;      /* Default 0 when thread created */
+  tid_t join_tid;                  /* Default -1 when no thread tries to join current thread */
+  void* userStack;  // ???
+  struct list upage_list;
 
 #ifdef USERPROG
   /* Owned by process.c. */
@@ -106,6 +111,12 @@ struct thread {
 
   /* Owned by thread.c. */
   unsigned magic; /* Detects stack overflow. */
+};
+
+/* User page */
+struct upage {
+  void* upage;
+  struct list_elem elem;
 };
 
 /* Types of scheduler that the user can request the kernel
