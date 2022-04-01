@@ -120,31 +120,28 @@ pid_t process_execute(const char* file_name) {
 }
 
 void t_pcb_init(struct thread* t, struct process *new_pcb, CHILD *new_c) {
-  struct process* t_pcb = t->pcb;
   new_pcb->pagedir = NULL;
-  t_pcb = new_pcb;
-  t_pcb->main_thread = t;
-  strlcpy(t_pcb->process_name, t->name, sizeof t->name);
-  list_init(&t_pcb->children);
-  t_pcb->curr_as_child = new_c;
+  t->pcb = new_pcb;
+  t->pcb->main_thread = t;
+  strlcpy(t->pcb->process_name, t->name, sizeof t->name);
+  list_init(&t->pcb->children);
+  t->pcb->curr_as_child = new_c;
   if (new_c) {
     new_c->pid = get_pid(new_pcb);
   }
   /* Initialize fd related structure member */
-  t_pcb->cur_fd = 2;
-  list_init(&t_pcb->file_descriptor_table);
+  t->pcb->cur_fd = 2;
+  list_init(&t->pcb->file_descriptor_table);
 
   /* project 2 task 3 */
-  list_init(&t_pcb->thread_info_list);
-  for (int i = 0; i < CHAR_MAX + 1; i++) {
-    t_pcb->lock_table[i] = NULL;
-    t_pcb->sema_table[i] = NULL;
-  }
-  t_pcb->num_locks = 0;
-  t_pcb->num_semas = 0;
-  lock_init(&t_pcb->process_lock);
-  t_pcb->highest_upage = NULL;
-  t_pcb->is_exiting = false;
+  list_init(&t->pcb->thread_info_list);
+  t->pcb->num_locks = 0;
+  t->pcb->num_semas = 0;
+  lock_init(&t->pcb->process_lock);
+  t->pcb->highest_upage = NULL;
+  t->pcb->is_exiting = false;
+  t->pcb->is_main_exiting = false;
+  t->pcb->exit_status = 0;
 }
 
 /* A thread function that loads a user process and starts it
@@ -304,7 +301,24 @@ struct file_descriptor* find_file_des(int fd) {
 /* Free the current process's resources. */
 void process_exit(void) {
   struct thread* cur = thread_current();
+  struct process* cur_pcb = cur->pcb;
   uint32_t* pd;
+  /* project 2 task 3 */
+  lock_acquire(&cur_pcb->process_lock);
+  if (!is_main_thread(cur, cur_pcb)) {
+    // cur is not main thread
+    cur_pcb->is_exiting = true;
+    lock_release(&cur_pcb->process_lock);
+    pthread_exit();
+  }
+  // if cur is main thread
+  if (!cur_pcb->is_main_exiting) {
+    cur_pcb->is_exiting = true;
+    cur_pcb->is_main_exiting = true;
+    lock_release(&cur_pcb->process_lock);
+    pthread_exit_main();
+  }
+
   /* If this thread does not have a PCB, don't worry */
   if (cur->pcb == NULL) {
     thread_exit();

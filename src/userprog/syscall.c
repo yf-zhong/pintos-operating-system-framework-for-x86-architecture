@@ -109,7 +109,12 @@ void sys_wait(struct intr_frame* f, pid_t pid) {
 void sys_exit(struct intr_frame* f, int status) {
     f->eax = status;
     struct process* pcb = thread_current()->pcb;
-    pcb->curr_as_child->exit_status = status;
+    lock_acquire(&pcb->process_lock);
+    if (!pcb->is_exiting || status == -1 || pcb->exit_status == 0) {
+      pcb->curr_as_child->exit_status = status;
+      pcb->exit_status = status;
+    }
+    lock_release(&pcb->process_lock);
     process_exit();
 }
 
@@ -325,13 +330,12 @@ void sys_pthread_join(struct intr_frame* f, tid_t tid) {
 void sys_lock_init(struct intr_frame* f, lock_t* lock) {
   struct process* pcb = thread_current()->pcb;
   lock_acquire(&pcb->process_lock);
-  if (pcb->num_locks > CHAR_MAX) {
+  if (pcb->num_locks < 0 || pcb->num_locks > CHAR_MAX) {
     f->eax = false;
   }
   else {
     *lock = pcb->num_locks;
-    pcb->lock_table[(int) *lock] = malloc(sizeof(struct lock));
-    lock_init(pcb->lock_table[(int) *lock]);
+    lock_init(&pcb->lock_table[(int) *lock]);
     pcb->num_locks++;
     f->eax = true;
   }
@@ -346,11 +350,11 @@ void sys_lock_acquire(struct intr_frame* f, lock_t* lock) {
   struct thread* t = thread_current();
   struct process* pcb = t->pcb;
   lock_acquire(&pcb->process_lock);
-  if ( *lock >= pcb->num_locks || pcb->lock_table[(int)*lock]->holder == t) {
+  if (*lock < 0 || *lock >= pcb->num_locks || pcb->lock_table[(int)*lock].holder == t) {
     f->eax = false;
   }
   else {
-    lock_acquire(pcb->lock_table[(int) *lock]);
+    lock_acquire(&pcb->lock_table[(int) *lock]);
     f->eax = true;
   }
   lock_release(&pcb->process_lock);
@@ -364,11 +368,11 @@ void sys_lock_release(struct intr_frame* f, lock_t* lock) {
   struct thread* t = thread_current();
   struct process* pcb = t->pcb;
   lock_acquire(&pcb->process_lock);
-  if (pcb->lock_table[(int) *lock] == NULL || pcb->lock_table[(int) *lock]->holder != t) {
+  if (*lock < 0 || *lock >= pcb->num_locks || pcb->lock_table[(int) *lock].holder != t) {
     f->eax = false;
   }
   else {
-    lock_release(pcb->lock_table[(int) *lock]);
+    lock_release(&pcb->lock_table[(int) *lock]);
     f->eax = true;
   }
   lock_release(&pcb->process_lock);
@@ -378,12 +382,11 @@ void sys_lock_release(struct intr_frame* f, lock_t* lock) {
 void sys_sema_init(struct intr_frame* f, sema_t* sema, int val) {
   struct process* pcb = thread_current()->pcb;
   lock_acquire(&pcb->process_lock);
-  if (val < 0 || pcb->num_semas) {
+  if (val < 0 || pcb->num_semas > CHAR_MAX) {
     f->eax = false;
   } else {
     *sema = pcb->num_semas;
-    pcb->sema_table[(int) *sema] = malloc(sizeof(sema));
-    sema_init(pcb->sema_table[(int) *sema], val);
+    sema_init(&pcb->sema_table[(int) *sema], val);
     pcb->num_semas++;
     f->eax = true;
   }
@@ -394,10 +397,10 @@ void sys_sema_init(struct intr_frame* f, sema_t* sema, int val) {
 void sys_sema_down(struct intr_frame* f, sema_t* sema) {
   struct process* pcb = thread_current()->pcb;
   lock_acquire(&pcb->process_lock);
-  if ((int) *sema < 0 || pcb->sema_table[(int) *sema] == NULL) {
+  if ((int) *sema < 0 || sema >= pcb->num_semas) {
     f->eax = false;
   } else {
-    sema_down(pcb->sema_table[(int) *sema]);
+    sema_down(&pcb->sema_table[(int) *sema]);
     f->eax = true;
   }
   lock_release(&pcb->process_lock);
@@ -407,10 +410,10 @@ void sys_sema_down(struct intr_frame* f, sema_t* sema) {
 void sys_sema_up(struct intr_frame* f, sema_t* sema) {
   struct process* pcb = thread_current()->pcb;
   lock_acquire(&pcb->process_lock);
-  if ((int) *sema < 0 || pcb->sema_table[(int)*sema] == NULL) {
+  if ((int) *sema < 0 || sema >= pcb->num_semas) {
     f->eax = false;
   } else {
-    sema_up(pcb->sema_table[(int)*sema]);
+    sema_up(&pcb->sema_table[(int)*sema]);
     f->eax = true;
   }
   lock_release(&pcb->process_lock);
