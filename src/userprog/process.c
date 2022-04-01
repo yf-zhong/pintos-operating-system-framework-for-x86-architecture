@@ -852,11 +852,16 @@ tid_t pthread_join(tid_t tid UNUSED) {
     }
   }
   struct thread* waiting_thread = NULL;
-  for (struct list_elem* e = list_begin(&cur_pcb->thread_list); e != list_end(&cur_pcb->thread_list); e = list_next(e)) {
-    struct thread *t = list_entry(e, struct thread, proc_elem);
-    if (t->tid == tid) {
-      waiting_thread = t;
-      break;
+  if (cur_pcb->main_thread->tid == tid) {
+    waiting_thread = cur_pcb->main_thread;
+  }
+  else {
+    for (struct list_elem* e = list_begin(&cur_pcb->thread_list); e != list_end(&cur_pcb->thread_list); e = list_next(e)) {
+      struct thread *t = list_entry(e, struct thread, proc_elem);
+      if (t->tid == tid) {
+        waiting_thread = t;
+        break;
+      }
     }
   }
   if (waiting_thread != NULL && waiting_thread->status == THREAD_DYING) {
