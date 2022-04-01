@@ -63,7 +63,7 @@ struct process {
 
   /* for project 2 task 3 */
   int next_tid;
-  struct list thread_info_list;    // save list of threads belongs to this process
+  struct list thread_list;    // save list of threads belongs to this process
   struct lock lock_table[CHAR_MAX + 1]; // an array to store all the locks for this process
   int num_locks;    
   struct semaphore sema_table[CHAR_MAX + 1];// an array to store all the semaphores for this process
