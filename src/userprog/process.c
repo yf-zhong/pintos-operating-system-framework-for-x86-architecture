@@ -140,6 +140,8 @@ void t_pcb_init(struct thread* t, struct process *new_pcb, CHILD *new_c) {
   lock_init(&t->pcb->process_lock);
   t->pcb->highest_upage = NULL;
   t->pcb->is_exiting = false;
+  t->pcb->is_main_exiting = false;
+  t->pcb->exit_status = 0;
 }
 
 /* A thread function that loads a user process and starts it
@@ -299,7 +301,24 @@ struct file_descriptor* find_file_des(int fd) {
 /* Free the current process's resources. */
 void process_exit(void) {
   struct thread* cur = thread_current();
+  struct process* cur_pcb = cur->pcb;
   uint32_t* pd;
+  /* project 2 task 3 */
+  lock_acquire(&cur_pcb->process_lock);
+  if (!is_main_thread(cur, cur_pcb)) {
+    // cur is not main thread
+    cur_pcb->is_exiting = true;
+    lock_release(&cur_pcb->process_lock);
+    pthread_exit();
+  }
+  // if cur is main thread
+  if (!cur_pcb->is_main_exiting) {
+    cur_pcb->is_exiting = true;
+    cur_pcb->is_main_exiting = true;
+    lock_release(&cur_pcb->process_lock);
+    pthread_exit_main();
+  }
+
   /* If this thread does not have a PCB, don't worry */
   if (cur->pcb == NULL) {
     thread_exit();
