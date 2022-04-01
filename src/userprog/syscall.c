@@ -310,7 +310,7 @@ void sys_pthread_create(struct intr_frame* f, stub_fun sf, pthread_fun pf, void 
   return;
 }
 
-void sys_pthread_exit(struct intr_frame* f) {
+void sys_pthread_exit(struct intr_frame* f UNUSED) {
   struct thread* t = thread_current();
   if (is_main_thread(t, t->pcb)) {
     pthread_exit_main();
