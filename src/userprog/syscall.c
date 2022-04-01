@@ -110,7 +110,7 @@ void sys_exit(struct intr_frame* f, int status) {
     f->eax = status;
     struct process* pcb = thread_current()->pcb;
     lock_acquire(&pcb->process_lock);
-    if (!pcb->is_exiting || status == -1 || pcb->exit_status == 0) {
+    if (!pcb->is_exiting || status == -1 || pcb->curr_as_child->exit_status == 0) {
       pcb->curr_as_child->exit_status = status;
       pcb->exit_status = status;
     }

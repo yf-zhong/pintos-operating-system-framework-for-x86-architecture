@@ -141,7 +141,6 @@ void t_pcb_init(struct thread* t, struct process *new_pcb, CHILD *new_c) {
   t->pcb->highest_upage = NULL;
   t->pcb->is_exiting = false;
   t->pcb->is_main_exiting = false;
-  t->pcb->exit_status = 0;
 }
 
 /* A thread function that loads a user process and starts it
@@ -313,11 +312,13 @@ void process_exit(void) {
   }
   // if cur is main thread
   if (!cur_pcb->is_main_exiting) {
+    // the main thread is the first time enter process_exit, call pthread_exit_main()
     cur_pcb->is_exiting = true;
     cur_pcb->is_main_exiting = true;
     lock_release(&cur_pcb->process_lock);
     pthread_exit_main();
   }
+  // the second time main thread enters process_exit()
 
   /* If this thread does not have a PCB, don't worry */
   if (cur->pcb == NULL) {
