@@ -140,6 +140,8 @@ void t_pcb_init(struct thread* t, struct process *new_pcb, CHILD *new_c) {
   lock_init(&t->pcb->process_lock);
   t->pcb->highest_upage = NULL;
   t->pcb->is_exiting = false;
+  t->pcb->is_main_exiting = false;
+  t->pcb->exit_status = 0;
 }
 
 /* A thread function that loads a user process and starts it
@@ -299,7 +301,24 @@ struct file_descriptor* find_file_des(int fd) {
 /* Free the current process's resources. */
 void process_exit(void) {
   struct thread* cur = thread_current();
+  struct process* cur_pcb = cur->pcb;
   uint32_t* pd;
+  /* project 2 task 3 */
+  lock_acquire(&cur_pcb->process_lock);
+  if (!is_main_thread(cur, cur_pcb)) {
+    // cur is not main thread
+    cur_pcb->is_exiting = true;
+    lock_release(&cur_pcb->process_lock);
+    pthread_exit();
+  }
+  // if cur is main thread
+  if (!cur_pcb->is_main_exiting) {
+    cur_pcb->is_exiting = true;
+    cur_pcb->is_main_exiting = true;
+    lock_release(&cur_pcb->process_lock);
+    pthread_exit_main();
+  }
+
   /* If this thread does not have a PCB, don't worry */
   if (cur->pcb == NULL) {
     thread_exit();
@@ -747,6 +766,23 @@ bool is_main_thread(struct thread* t, struct process* p) { return p->main_thread
 /* Gets the PID of a process */
 pid_t get_pid(struct process* p) { return (pid_t)p->main_thread->tid; }
 
+/* Helper */
+static bool setup_thread_stack(void ** esp) {
+  uint8_t* kpage = palloc_get_page(PAL_USER | PAL_ZERO);
+  if (kpage != NULL) {
+    bool success = false;
+    int i = 0;
+    while (!success) {
+      i += 1;
+      success = install_page(((uint8_t*)PHYS_BASE) - i * PGSIZE, kpage, true);
+    }
+    thread_current()->upage = ((uint8_t*)PHYS_BASE) - i * PGSIZE;
+    *esp = PHYS_BASE - (i - 1) * PGSIZE;
+    return true;
+  }
+  return false;
+}
+
 /* Creates a new stack for the thread and sets up its arguments.
    Stores the thread's entry point into *EIP and its initial stack
    pointer into *ESP. Handles all cleanup if unsuccessful. Returns
@@ -755,7 +791,9 @@ pid_t get_pid(struct process* p) { return (pid_t)p->main_thread->tid; }
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. You may find it necessary to change the
    function signature. */
-bool setup_thread(void (**eip)(void) UNUSED, void** esp UNUSED) { return false; }
+bool setup_thread(void (**eip)(void) UNUSED, void** esp UNUSED) { 
+  return setup_thread_stack(esp);
+}
 
 /* Starts a new thread with a new user stack running SF, which takes
    TF and ARG as arguments on its user stack. This new thread may be
