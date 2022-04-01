@@ -32,6 +32,14 @@ void exit_setup(struct process*);
 void free_spa(SPA*);
 bool setup_thread(void (**eip)(void), void** esp);
 
+/* helpers */
+static bool setup_thread_stack(void ** esp);
+void drop_all_holding_locks(void);
+void free_upage(void);
+void wakeup_waiting_thread(void);
+void remove_cur_from_thread_list(void);
+void join_all_nonmain_threads(void);
+
 /* Initializes user programs in the system by ensuring the main
    thread has a minimal PCB so that it can execute and wait for
    the first user process. Any additions to the PCB should be also
