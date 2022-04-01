@@ -4,6 +4,7 @@
 #include "threads/thread.h"
 #include "threads/synch.h"
 #include <stdint.h>
+#include <limits.h>
 
 // At most 8MB can be allocated to the stack
 // These defines will be used in Project 2: Multithreading
@@ -16,9 +17,19 @@
    the TID of the main thread of the process */
 typedef tid_t pid_t;
 
+/* Lock for the file system operation */
+struct lock file_sys_lock;
+
 /* Thread functions (Project 2: Multithreading) */
 typedef void (*pthread_fun)(void*);
 typedef void (*stub_fun)(pthread_fun, void*);
+
+struct thread_info {
+  tid_t tid;
+  bool is_exited;
+  struct thread* t;
+  struct list_elem proc_elem;
+};
 
 typedef struct child {
   pid_t pid;
@@ -48,6 +59,16 @@ struct process {
   struct file* curr_executable;
   int cur_fd;                 /* The fd number assigned to new file */
   struct list file_descriptor_table; /* All the files opened in current process */
+
+  /* for project 2 task 3 */
+  struct list thread_info_list;    // save list of threads belongs to this process
+  struct lock lock_table[CHAR_MAX + 1]; // an array to store all the locks for this process
+  int num_locks;    
+  struct semaphore sema_table[CHAR_MAX + 1];// an array to store all the semaphores for this process
+  int num_semas;
+  struct lock process_lock;
+  void* highest_upage;
+  bool is_exiting; // check everytime after switch_threads, if true, exit the current thread
 };
 
 /* One element in the file descriptor table */

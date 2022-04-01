@@ -132,6 +132,14 @@ void t_pcb_init(struct thread* t, struct process *new_pcb, CHILD *new_c) {
   /* Initialize fd related structure member */
   t->pcb->cur_fd = 2;
   list_init(&t->pcb->file_descriptor_table);
+
+  /* project 2 task 3 */
+  list_init(&t->pcb->thread_info_list);
+  t->pcb->num_locks = 0;
+  t->pcb->num_semas = 0;
+  lock_init(&t->pcb->process_lock);
+  t->pcb->highest_upage = NULL;
+  t->pcb->is_exiting = false;
 }
 
 /* A thread function that loads a user process and starts it
@@ -519,6 +527,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
     printf("load: %s: open failed\n", file_name);
     goto done;
   }
+  // file_deny_write(file);
   
   /* Read and verify executable header. */
   if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr ||
@@ -774,7 +783,26 @@ static void start_pthread(void* exec_ UNUSED) {}
 
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. */
-tid_t pthread_join(tid_t tid UNUSED) { return -1; }
+tid_t pthread_join(tid_t tid UNUSED) {
+  struct list_elem* e;
+  struct thread_info* t_info = NULL;
+  struct list thread_info_list = thread_current()->pcb->thread_info_list;
+  for (e = list_begin(&thread_info_list); e != list_end(&thread_info_list); e = list_next(e)) {
+    struct thread_info *cur_info = list_entry(e, struct thread_info, proc_elem);
+    if (cur_info->tid == tid) {
+      t_info = cur_info;
+      break;
+    }
+  }
+  if (!t_info) {
+    return TID_ERROR;
+  }
+  if (t_info->is_exited) {
+    return tid;
+  }
+  sema_down(&t_info->t->join_sema);
+  return tid;
+}
 
 /* Free the current thread's resources. Most resources will
    be freed on thread_exit(), so all we have to do is deallocate the
