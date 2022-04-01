@@ -897,21 +897,18 @@ void pthread_exit(void) {
   free_upage();
   wakeup_waiting_thread();
   drop_all_holding_locks();
+  remove_cur_from_thread_list();
   thread_exit();
 }
 
 void join_all_nonmain_threads() {
   struct thread* cur = thread_current();
   struct process* cur_pcb = cur->pcb;
-  lock_acquire(&cur_pcb->process_lock);
   for (int tid = 0; tid < cur_pcb->next_tid; tid++) {
-    lock_release(&cur_pcb->process_lock);
     if (cur->tid != tid) {
       pthread_join(tid);
     }
-    lock_acquire(&cur_pcb->process_lock);
   }
-  lock_release(&cur_pcb->process_lock);
 }
 
 /* Only to be used when the main thread explicitly calls pthread_exit.
@@ -931,6 +928,7 @@ void pthread_exit_main(void) {
   wakeup_waiting_thread();
   drop_all_holding_locks();
   join_all_nonmain_threads();
+  remove_cur_from_thread_list();
   // all non-main threads are exited, exit the process
   // the exit status is set by thread that calls syscall exit 
   // the exit status is -1 if no thread call syscall exit
