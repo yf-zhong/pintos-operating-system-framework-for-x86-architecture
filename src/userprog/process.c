@@ -852,7 +852,16 @@ tid_t pthread_join(tid_t tid UNUSED) {
 
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. */
-void pthread_exit(void) {}
+void pthread_exit(void) {
+  struct thread* cur = thread_current();
+  pagedir_clear_page(cur->pcb->pagedir, cur->upage);
+  // free upage that cur is holding
+  for (struct list_elem *e = list_begin(&cur->holding_locks); e != list_end(&cur->holding_locks); e = list_next(e)) {
+    struct lock *l = list_entry(e, struct lock, elem);
+    lock_release(l);
+  }
+  thread_exit();
+}
 
 /* Only to be used when the main thread explicitly calls pthread_exit.
    The main thread should wait on all threads in the process to
@@ -862,4 +871,10 @@ void pthread_exit(void) {}
 
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. */
-void pthread_exit_main(void) {}
+void pthread_exit_main(void) {
+  struct thread* cur = thread_current();
+  enum intr_level old_level = intr_disable();
+  if (cur->join_sema_ptr != NULL) {
+    sema_up(&join_sema_ptr)
+  }
+}
