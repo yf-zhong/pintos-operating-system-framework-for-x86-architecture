@@ -832,9 +832,22 @@ static void start_pthread(void* exec_ UNUSED) {
   lock_release(&t->pcb->process_lock);
   t->upage = NULL;
   struct intr_frame if_;
-  setup_thread(if_.eip, if_.esp);
+  setup_thread(&if_.eip, &if_.esp);
 
-  /*  */
+  /* add padding to make if_.esp % 16 == 12 */
+  unsigned int allByteCount = sizeof(char*) * (count_args(file_name) + 1) + sizeof(char**) + sizeof(int);
+  for (int argIndex = nArgs - 1; argIndex >= 0; argIndex--) {
+    arg = args[argIndex];
+    argByteCount = sizeof(char) * (strlen(arg) + 1);
+    allByteCount += argByteCount;
+    push_stack(esp, arg, argByteCount);
+    argsAddrInStack[argIndex] = (char*) *esp;
+  }
+  // push stack-aglin onto user stack
+  argByteCount = sizeof(uint8_t) * ((0b10000 - (allByteCount & 0b1111)) & 0b1111);
+  uint8_t *arg_zeros = calloc(argByteCount / sizeof(uint8_t), sizeof(uint8_t));
+  push_stack(esp, arg_zeros, sizeof(uint8_t) * argByteCount);
+  free(arg_zeros);
 
 }
 
