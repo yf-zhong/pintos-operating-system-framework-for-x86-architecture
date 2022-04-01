@@ -143,6 +143,7 @@ void t_pcb_init(struct thread* t, struct process *new_pcb, CHILD *new_c) {
 
   /* project 2 task 3 */
   list_init(&t->pcb->thread_list);
+  list_init(&t->pcb->died_thread_list);
   t->pcb->num_locks = 0;
   t->pcb->num_semas = 0;
   lock_init(&t->pcb->process_lock);
@@ -284,6 +285,15 @@ void decrement_children_ref_cnt(struct process* pcb) {
     decrement_ref_cnt(cptr);
     e = next_e;
   }
+}
+
+void remove_died_thread_list(struct process* pcb) {
+  struct list_elem *e = list_begin(&pcb->died_thread_list);
+  while (!list_empty(&pcb->died_thread_list)) {
+    e = list_pop_front(&pcb->died_thread_list);
+    free(list_entry(e, struct died_thread, elem));
+  }
+  return;
 }
 
 void exit_setup(struct process* pcb_to_free) {
@@ -835,9 +845,11 @@ static void start_pthread(void* exec_ UNUSED) {}
 tid_t pthread_join(tid_t tid UNUSED) {
   struct thread* cur = thread_current();
   struct process* cur_pcb = cur->pcb;
-  bool is_tid_in_bound = 0 < tid && tid < cur_pcb->next_tid;
-  if (!is_tid_in_bound) {
-    return TID_ERROR;
+  for (struct list_elem* e = list_begin(&cur_pcb->died_thread_list); e != list_end(&cur_pcb->died_thread_list); e = list_next(e)) {
+    struct died_thread *dt_ptr = list_entry(e, struct died_thread, elem);
+    if (dt_ptr->tid == tid) {
+      return tid;
+    }
   }
   struct thread* waiting_thread = NULL;
   for (struct list_elem* e = list_begin(&cur_pcb->thread_list); e != list_end(&cur_pcb->thread_list); e = list_next(e)) {
@@ -847,10 +859,10 @@ tid_t pthread_join(tid_t tid UNUSED) {
       break;
     }
   }
-  if (waiting_thread == NULL || waiting_thread->status == THREAD_DYING) {
+  if (waiting_thread != NULL && waiting_thread->status == THREAD_DYING) {
     return tid;
   }
-  if (waiting_thread->join_sema_ptr != NULL) {
+  if (waiting_thread == NULL || waiting_thread->join_sema_ptr != NULL) {
     return TID_ERROR;
   }
   waiting_thread->join_sema_ptr = &cur->join_sema;  // can use thread_block?
@@ -884,8 +896,11 @@ void wakeup_waiting_thread() {
 void remove_cur_from_thread_list() {
   struct thread* cur = thread_current();
   struct process* cur_pcb = cur->pcb;
+  struct died_thread* dt_ptr = (struct died_thread*) malloc(sizeof(struct died_thread));
+  dt_ptr->tid = cur->tid;
   lock_acquire(&cur_pcb->process_lock);
   list_remove(&cur->proc_elem);
+  list_push_back(&cur_pcb->died_thread_list, &dt_ptr->elem);
   lock_release(&cur_pcb->process_lock);
 }
 
@@ -915,11 +930,15 @@ void pthread_exit(void) {
 void join_all_nonmain_threads() {
   struct thread* cur = thread_current();
   struct process* cur_pcb = cur->pcb;
-  for (int tid = 0; tid < cur_pcb->next_tid; tid++) {
-    if (cur->tid != tid) {
-      pthread_join(tid);
-    }
+  struct thread* to_join = NULL;
+  lock_acquire(&cur_pcb->process_lock);
+  while (!list_empty(&cur_pcb->thread_list)) {
+    to_join = list_entry(list_begin(&cur_pcb->thread_list), struct thread, proc_elem);
+    lock_release(&cur_pcb->process_lock);
+    pthread_join(to_join->tid);
+    lock_acquire(&cur_pcb->process_lock);
   }
+  lock_release(&cur_pcb->process_lock);
 }
 
 /* Only to be used when the main thread explicitly calls pthread_exit.
@@ -939,7 +958,6 @@ void pthread_exit_main(void) {
   wakeup_waiting_thread();
   drop_all_holding_locks();
   join_all_nonmain_threads();
-  remove_cur_from_thread_list();
   // all non-main threads are exited, exit the process
   // the exit status is set by thread that calls syscall exit 
   // the exit status is -1 if no thread call syscall exit
