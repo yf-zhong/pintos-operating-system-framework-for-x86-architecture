@@ -844,7 +844,7 @@ tid_t pthread_execute(stub_fun sf UNUSED, pthread_fun tf UNUSED, void* arg UNUSE
   sa.exec_sema.value = 0;
 
   //TODO: Add a lock to guarantee that only one function can run this at a time
-  tid = thread_create("", PRI_DEFAUL T, start_pthread, &sa);
+  tid = thread_create("", PRI_DEFAULT, start_pthread, &sa);
   if (tid == TID_ERROR) {
     return tid;
   }
