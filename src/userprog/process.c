@@ -817,8 +817,11 @@ static void start_pthread(void* exec_ UNUSED) {
   struct thread* t = thread_current();
   t->pcb = exec->pcb;
   lock_acquire(&t->pcb->process_lock);
-  
+  list_push_back(&t->pcb->thread_list, &t->proc_elem);
   lock_release(&t->pcb->process_lock);
+  t->upage = NULL;
+  struct intr_frame if_;
+  setup_thread(if_.eip, if_.esp);
 }
 
 /* Waits for thread with TID to die, if that thread was spawned
