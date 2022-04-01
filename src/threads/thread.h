@@ -6,7 +6,6 @@
 #include <stdint.h>
 #include "threads/synch.h"
 #include "threads/fixed-point.h"
-#include "userprog/process.h"
 
 /* States in a thread's life cycle. */
 enum thread_status {
@@ -103,6 +102,7 @@ struct thread {
   struct semaphore join_sema;      /* Default 0 when thread created */
   struct semaphore* join_sema_ptr; /* Default -1 when no thread tries to join current thread */
   void* upage;
+  struct list_elem proc_elem;
 
 #ifdef USERPROG
   /* Owned by process.c. */
