@@ -871,8 +871,10 @@ void wakeup_waiting_thread() {
 }
 
 void remove_cur_from_thread_list() {
+  struct thread* cur = thread_current();
+  struct process* cur_pcb = cur->pcb;
   lock_acquire(&cur_pcb->process_lock);
-  list_remove(&thread_current()->proc_elem);
+  list_remove(&cur->proc_elem);
   lock_release(&cur_pcb->process_lock);
 }
 
