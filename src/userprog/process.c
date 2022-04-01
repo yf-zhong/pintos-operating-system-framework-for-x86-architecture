@@ -825,25 +825,28 @@ static void start_pthread(void* exec_ UNUSED) {}
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. */
 tid_t pthread_join(tid_t tid UNUSED) {
-  // struct list_elem* e;
-  // struct thread_info* t_info = NULL;
-  // struct list thread_info_list = thread_current()->pcb->thread_info_list;
-  // for (e = list_begin(&thread_info_list); e != list_end(&thread_info_list); e = list_next(e)) {
-  //   struct thread_info *cur_info = list_entry(e, struct thread_info, proc_elem);
-  //   if (cur_info->tid == tid) {
-  //     t_info = cur_info;
-  //     break;
-  //   }
-  // }
-  // if (!t_info) {
-  //   return TID_ERROR;
-  // }
-  // if (t_info->is_exited) {
-  //   return tid;
-  // }
-  // sema_down(&t_info->t->join_sema);
-  // return tid;
-  return -1;
+  struct thread* cur = thread_current();
+  struct process* cur_pcb = cur->pcb;
+  bool is_tid_in_bound = 0 < tid && tid < cur_pcb->next_tid;
+  if (!is_tid_in_bound) {
+    return TID_ERROR;
+  }
+  struct thread* waiting_thread = NULL;
+  for (struct list_elem* e = list_begin(&cur_pcb->thread_list); e != list_end(&cur_pcb->thread_list); e = list_next(e)) {
+    struct thread *t = list_entry(e, struct thread, proc_elem);
+    if (t->tid == tid) {
+      waiting_thread = t;
+      break;
+    }
+  }
+  if (waiting_thread == NULL || waiting_thread->status == THREAD_DYING) {
+    return tid;
+  }
+  if (waiting_thread->join_sema_ptr != NULL) {
+    return TID_ERROR;
+  }
+  waiting_thread->join_sema_ptr = &cur->join_sema;  // can use thread_block?
+  sema_down(&cur->join_sema);
 }
 
 /* Free all current thread's holding locks */
