@@ -815,7 +815,10 @@ tid_t pthread_execute(stub_fun sf UNUSED, pthread_fun tf UNUSED, void* arg UNUSE
 static void start_pthread(void* exec_ UNUSED) {
   struct sfun_args* exec = exec_;
   struct thread* t = thread_current();
-  t->pcb = exec->
+  t->pcb = exec->pcb;
+  lock_acquire(&t->pcb->process_lock);
+  
+  lock_release(&t->pcb->process_lock);
 }
 
 /* Waits for thread with TID to die, if that thread was spawned
