@@ -31,6 +31,11 @@ struct thread_info {
   struct list_elem proc_elem;
 };
 
+struct died_thread {
+  tid_t tid;
+  struct list_elem;
+};
+
 typedef struct child {
   pid_t pid;
   struct semaphore exec_sema;
@@ -61,16 +66,15 @@ struct process {
   struct list file_descriptor_table; /* All the files opened in current process */
 
   /* for project 2 task 3 */
-  struct list thread_info_list;    // save list of threads belongs to this process
+  struct list died_thread_list;
   struct lock lock_table[CHAR_MAX + 1]; // an array to store all the locks for this process
   int num_locks;    
-  struct semaphore sema_table[CHAR_MAX + 1];// an array to store all the semaphores for this process
+  struct semaphore sema_table[CHAR_MAX + 1]; // an array to store all the semaphores for this process
   int num_semas;
   struct lock process_lock;
   void* highest_upage;
   bool is_exiting; // check everytime after switch_threads, if true, exit the current thread
   bool is_main_exiting;
-  int exit_status;
 };
 
 /* One element in the file descriptor table */
