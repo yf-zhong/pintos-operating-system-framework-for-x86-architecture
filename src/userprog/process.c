@@ -134,14 +134,13 @@ void t_pcb_init(struct thread* t, struct process *new_pcb, CHILD *new_c) {
   list_init(&t->pcb->file_descriptor_table);
 
   /* project 2 task 3 */
-  list_init(&t->pcb->thread_info_list);
+  list_init(&t->pcb->thread_list);
   t->pcb->num_locks = 0;
   t->pcb->num_semas = 0;
   lock_init(&t->pcb->process_lock);
   t->pcb->highest_upage = NULL;
   t->pcb->is_exiting = false;
   t->pcb->is_main_exiting = false;
-  t->pcb->exit_status = 0;
 }
 
 /* A thread function that loads a user process and starts it
@@ -304,20 +303,24 @@ void process_exit(void) {
   struct process* cur_pcb = cur->pcb;
   uint32_t* pd;
   /* project 2 task 3 */
-  lock_acquire(&cur_pcb->process_lock);
-  if (!is_main_thread(cur, cur_pcb)) {
-    // cur is not main thread
-    cur_pcb->is_exiting = true;
-    lock_release(&cur_pcb->process_lock);
-    pthread_exit();
+  if (cur_pcb != NULL) {
+    lock_acquire(&cur_pcb->process_lock);
+    if (!is_main_thread(cur, cur_pcb)) {
+      // cur is not main thread
+      cur_pcb->is_exiting = true;
+      lock_release(&cur_pcb->process_lock);
+      pthread_exit();
+    }
+    // if cur is main thread
+    if (!cur_pcb->is_main_exiting) {
+      // the main thread is the first time enter process_exit, call pthread_exit_main()
+      cur_pcb->is_exiting = true;
+      cur_pcb->is_main_exiting = true;
+      lock_release(&cur_pcb->process_lock);
+      pthread_exit_main();
+    }
   }
-  // if cur is main thread
-  if (!cur_pcb->is_main_exiting) {
-    cur_pcb->is_exiting = true;
-    cur_pcb->is_main_exiting = true;
-    lock_release(&cur_pcb->process_lock);
-    pthread_exit_main();
-  }
+  // cur_pcb is NULL or the second time main thread enters process_exit()
 
   /* If this thread does not have a PCB, don't worry */
   if (cur->pcb == NULL) {
@@ -832,24 +835,57 @@ static void start_pthread(void* exec_ UNUSED) {
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. */
 tid_t pthread_join(tid_t tid UNUSED) {
-  struct list_elem* e;
-  struct thread_info* t_info = NULL;
-  struct list thread_info_list = thread_current()->pcb->thread_info_list;
-  for (e = list_begin(&thread_info_list); e != list_end(&thread_info_list); e = list_next(e)) {
-    struct thread_info *cur_info = list_entry(e, struct thread_info, proc_elem);
-    if (cur_info->tid == tid) {
-      t_info = cur_info;
-      break;
-    }
+  // struct list_elem* e;
+  // struct thread_info* t_info = NULL;
+  // struct list thread_info_list = thread_current()->pcb->thread_info_list;
+  // for (e = list_begin(&thread_info_list); e != list_end(&thread_info_list); e = list_next(e)) {
+  //   struct thread_info *cur_info = list_entry(e, struct thread_info, proc_elem);
+  //   if (cur_info->tid == tid) {
+  //     t_info = cur_info;
+  //     break;
+  //   }
+  // }
+  // if (!t_info) {
+  //   return TID_ERROR;
+  // }
+  // if (t_info->is_exited) {
+  //   return tid;
+  // }
+  // sema_down(&t_info->t->join_sema);
+  // return tid;
+  return -1;
+}
+
+/* Free all current thread's holding locks */
+void drop_all_holding_locks() {
+  struct thread* cur = thread_current();
+  for (struct list_elem *e = list_begin(&cur->holding_locks); e != list_end(&cur->holding_locks); e = list_next(e)) {
+    struct lock *l = list_entry(e, struct lock, elem);
+    lock_release(l);
   }
-  if (!t_info) {
-    return TID_ERROR;
+}
+
+void free_upage() {
+  struct thread* cur = thread_current();
+  struct process* cur_pcb = cur->pcb;
+  lock_acquire(&cur_pcb->process_lock);
+  pagedir_clear_page(cur_pcb->pagedir, cur->upage);
+  lock_release(&cur_pcb->process_lock);
+}
+
+void wakeup_waiting_thread() {
+  struct thread* cur = thread_current();
+  if (cur->join_sema_ptr != NULL) {
+    sema_up(&cur->join_sema_ptr);
   }
-  if (t_info->is_exited) {
-    return tid;
-  }
-  sema_down(&t_info->t->join_sema);
-  return tid;
+}
+
+void remove_cur_from_thread_list() {
+  struct thread* cur = thread_current();
+  struct process* cur_pcb = cur->pcb;
+  lock_acquire(&cur_pcb->process_lock);
+  list_remove(&cur->proc_elem);
+  lock_release(&cur_pcb->process_lock);
 }
 
 /* Free the current thread's resources. Most resources will
@@ -861,7 +897,32 @@ tid_t pthread_join(tid_t tid UNUSED) {
 
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. */
-void pthread_exit(void) {}
+void pthread_exit(void) {
+  struct thread* cur = thread_current();
+  struct process* cur_pcb = cur->pcb;
+  // redirect main thread to pthread_exit_main()
+  if (is_main_thread(cur, cur_pcb)) {
+    pthread_exit_main();
+  }
+  free_upage();
+  wakeup_waiting_thread();
+  drop_all_holding_locks();
+  thread_exit();
+}
+
+void join_all_nonmain_threads() {
+  struct thread* cur = thread_current();
+  struct process* cur_pcb = cur->pcb;
+  lock_acquire(&cur_pcb->process_lock);
+  for (int tid = 0; tid < cur_pcb->next_tid; tid++) {
+    lock_release(&cur_pcb->process_lock);
+    if (cur->tid != tid) {
+      pthread_join(tid);
+    }
+    lock_acquire(&cur_pcb->process_lock);
+  }
+  lock_release(&cur_pcb->process_lock);
+}
 
 /* Only to be used when the main thread explicitly calls pthread_exit.
    The main thread should wait on all threads in the process to
@@ -871,4 +932,17 @@ void pthread_exit(void) {}
 
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. */
-void pthread_exit_main(void) {}
+void pthread_exit_main(void) {
+  struct thread* cur = thread_current();
+  // redirect all non main threads to pthread_exit()
+  if (!is_main_thread(cur, cur->pcb)) {
+    pthread_exit();
+  }
+  wakeup_waiting_thread();
+  drop_all_holding_locks();
+  join_all_nonmain_threads();
+  // all non-main threads are exited, exit the process
+  // the exit status is set by thread that calls syscall exit 
+  // the exit status is -1 if no thread call syscall exit
+  process_exit();
+}
