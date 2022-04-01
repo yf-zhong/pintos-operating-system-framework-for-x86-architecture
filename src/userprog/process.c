@@ -863,6 +863,9 @@ static void start_pthread(void* exec_ UNUSED) {
   struct intr_frame if_;
   bool success;
   
+  struct thread *t = thread_current();
+  t->pcb = exec->pcb;
+
   memset(&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
