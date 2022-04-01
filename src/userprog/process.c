@@ -24,11 +24,11 @@ static thread_func start_process NO_RETURN;
 static thread_func start_pthread NO_RETURN;
 static bool load(const char* file_name, void (**eip)(void), void** esp);
 CHILD* new_child(void);
-void t_pcb_init(struct thread*, struct process*, CHILD*);
+void pcb_init(struct thread*, struct process*, CHILD*);
 CHILD* find_child(pid_t);
 void decrement_ref_cnt(CHILD*);
 void decrement_children_ref_cnt(struct process*);
-void exit_setup(struct process*);
+void pcb_exit_setup(struct process*);
 void free_spa(SPA*);
 bool setup_thread(void (**eip)(void), void** esp);
 
@@ -54,7 +54,7 @@ void userprog_init(void) {
      page directory) when t->pcb is assigned, because a timer interrupt
      can come at any time and activate our pagedir */
   t->pcb = calloc(sizeof(struct process), 1);
-  t_pcb_init(t, t->pcb, NULL);
+  pcb_init(t, t->pcb, NULL);
   success = t->pcb != NULL;
 
   /* Kill the kernel if we did not succeed */
@@ -127,7 +127,7 @@ pid_t process_execute(const char* file_name) {
   return tid;
 }
 
-void t_pcb_init(struct thread* t, struct process *new_pcb, CHILD *new_c) {
+void pcb_init(struct thread* t, struct process *new_pcb, CHILD *new_c) {
   new_pcb->pagedir = NULL;
   t->pcb = new_pcb;
   t->pcb->main_thread = t;
@@ -170,7 +170,7 @@ static void start_process(void* spaptr_) {
   if (success) {
     // Ensure that timer_interrupt() -> schedule() -> process_activate()
     // does not try to activate our uninitialized pagedir
-    t_pcb_init(t, new_pcb, new_c);
+    pcb_init(t, new_pcb, new_c);
   }
  
   /* Initialize interrupt frame and load executable. */
@@ -205,7 +205,7 @@ static void start_process(void* spaptr_) {
     // can try to activate the pagedir, but it is now freed memory
     struct process* pcb_to_free = t->pcb;
     new_c->exit_status = ERROR;
-    exit_setup(pcb_to_free);
+    pcb_exit_setup(pcb_to_free);
     t->pcb = NULL;
     free(pcb_to_free);
   }
@@ -296,7 +296,7 @@ void remove_died_thread_list(struct process* pcb) {
   return;
 }
 
-void exit_setup(struct process* pcb_to_free) {
+void pcb_exit_setup(struct process* pcb_to_free) {
   pcb_to_free->curr_as_child->is_exited = true;
   decrement_children_ref_cnt(pcb_to_free);
   decrement_ref_cnt(pcb_to_free->curr_as_child);
@@ -382,7 +382,7 @@ void process_exit(void) {
   printf("%s: exit(%d)\n", pcb_to_free->process_name, pcb_to_free->curr_as_child->exit_status);
 
   cur->pcb = NULL;
-  exit_setup(pcb_to_free);
+  pcb_exit_setup(pcb_to_free);
   free(pcb_to_free);
   thread_exit();
 }
