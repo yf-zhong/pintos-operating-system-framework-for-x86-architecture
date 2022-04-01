@@ -358,9 +358,6 @@ void sys_lock_acquire(struct intr_frame* f, lock_t* lock) {
 }
 
 void sys_lock_release(struct intr_frame* f, lock_t* lock) {
-  if (*lock < 0) {
-    sys_exit(f, -1);
-  }
   struct thread* t = thread_current();
   struct process* pcb = t->pcb;
   lock_acquire(&pcb->process_lock);
