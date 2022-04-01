@@ -448,6 +448,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       break;
     case SYS_CREATE:
     case SYS_SEEK:
+    case SYS_SEMA_INIT:
       num_args = 2;
       break;
     case SYS_PRACTICE:
@@ -460,6 +461,11 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     case SYS_FILESIZE:
     case SYS_TELL:
     case SYS_CLOSE:
+    case SYS_LOCK_INIT:
+    case SYS_LOCK_RELEASE:
+    case SYS_LOCK_ACQUIRE:
+    case SYS_SEMA_DOWN:
+    case SYS_SEMA_UP:
       num_args = 1;
       break;
     default:
