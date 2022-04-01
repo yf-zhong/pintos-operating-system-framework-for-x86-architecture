@@ -576,10 +576,6 @@ void thread_switch_tail(struct thread* prev) {
   /* Start new time slice. */
   thread_ticks = 0;
 
-  if (cur->pcb != NULL && cur->pcb->is_exiting) {
-    pthread_exit();
-  }
-
 #ifdef USERPROG
   /* Activate the new address space. */
   process_activate();

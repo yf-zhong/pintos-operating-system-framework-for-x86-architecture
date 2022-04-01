@@ -870,6 +870,12 @@ void wakeup_waiting_thread() {
   }
 }
 
+void remove_cur_from_thread_list() {
+  lock_acquire(&cur_pcb->process_lock);
+  list_remove(&thread_current()->proc_elem);
+  lock_release(&cur_pcb->process_lock);
+}
+
 /* Free the current thread's resources. Most resources will
    be freed on thread_exit(), so all we have to do is deallocate the
    thread's userspace stack. Wake any waiters on this thread.
