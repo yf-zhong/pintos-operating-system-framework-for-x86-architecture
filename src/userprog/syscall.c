@@ -109,7 +109,11 @@ void sys_wait(struct intr_frame* f, pid_t pid) {
 void sys_exit(struct intr_frame* f, int status) {
     f->eax = status;
     struct process* pcb = thread_current()->pcb;
-    pcb->curr_as_child->exit_status = status;
+    lock_acquire(&pcb->process_lock);
+    if (!pcb->is_exiting || status == -1 || pcb->curr_as_child->exit_status == 0) {
+      pcb->curr_as_child->exit_status = status;
+    }
+    lock_release(&pcb->process_lock);
     process_exit();
 }
 
@@ -443,6 +447,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       break;
     case SYS_CREATE:
     case SYS_SEEK:
+    case SYS_SEMA_INIT:
       num_args = 2;
       break;
     case SYS_PRACTICE:
@@ -455,6 +460,11 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     case SYS_FILESIZE:
     case SYS_TELL:
     case SYS_CLOSE:
+    case SYS_LOCK_INIT:
+    case SYS_LOCK_RELEASE:
+    case SYS_LOCK_ACQUIRE:
+    case SYS_SEMA_DOWN:
+    case SYS_SEMA_UP:
       num_args = 1;
       break;
     default:

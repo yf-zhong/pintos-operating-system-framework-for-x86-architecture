@@ -24,11 +24,12 @@ struct lock file_sys_lock;
 typedef void (*pthread_fun)(void*);
 typedef void (*stub_fun)(pthread_fun, void*);
 
-struct thread_info {
-  tid_t tid;
-  bool is_exited;
-  struct thread* t;
-  struct list_elem proc_elem;
+struct sfun_args {
+  stub_fun sfun;
+  pthread_fun tfun;
+  void* arg;
+  struct semaphore exec_sema;
+  struct process* pcb;
 };
 
 typedef struct child {
@@ -61,7 +62,8 @@ struct process {
   struct list file_descriptor_table; /* All the files opened in current process */
 
   /* for project 2 task 3 */
-  struct list thread_info_list;    // save list of threads belongs to this process
+  int next_tid;
+  struct list thread_list;    // save list of threads belongs to this process
   struct lock lock_table[CHAR_MAX + 1]; // an array to store all the locks for this process
   int num_locks;    
   struct semaphore sema_table[CHAR_MAX + 1];// an array to store all the semaphores for this process
@@ -69,6 +71,7 @@ struct process {
   struct lock process_lock;
   void* highest_upage;
   bool is_exiting; // check everytime after switch_threads, if true, exit the current thread
+  bool is_main_exiting;
 };
 
 /* One element in the file descriptor table */
