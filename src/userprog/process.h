@@ -31,6 +31,14 @@ struct thread_info {
   struct list_elem proc_elem;
 };
 
+struct sfun_args {
+  stub_fun sfun;
+  pthread_fun tfun;
+  void* arg;
+  struct semaphore exec_sema;
+  struct process* pcb;
+};
+
 typedef struct child {
   pid_t pid;
   struct semaphore exec_sema;
