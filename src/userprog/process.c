@@ -149,6 +149,7 @@ void t_pcb_init(struct thread* t, struct process *new_pcb, CHILD *new_c) {
   t->pcb->highest_upage = NULL;
   t->pcb->is_exiting = false;
   t->pcb->is_main_exiting = false;
+  new_pcb->main_thread = t;
 }
 
 /* A thread function that loads a user process and starts it
@@ -844,7 +845,9 @@ tid_t pthread_execute(stub_fun sf UNUSED, pthread_fun tf UNUSED, void* arg UNUSE
   sa.exec_sema.value = 0;
 
   //TODO: Add a lock to guarantee that only one function can run this at a time
-  tid = thread_create("", PRI_DEFAUL T, start_pthread, &sa);
+  lock_acquire(&t->pcb->process_lock);
+  tid = thread_create("", PRI_DEFAULT, start_pthread, &sa);
+  lock_release(&t->pcb->process_lock);
   if (tid == TID_ERROR) {
     return tid;
   }
@@ -936,7 +939,7 @@ void free_upage() {
 void wakeup_waiting_thread() {
   struct thread* cur = thread_current();
   if (cur->join_sema_ptr != NULL) {
-    sema_up(&cur->join_sema_ptr);
+    sema_up(cur->join_sema_ptr);
   }
 }
 
