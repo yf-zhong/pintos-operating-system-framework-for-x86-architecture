@@ -928,7 +928,7 @@ tid_t pthread_join(tid_t tid UNUSED) {
   struct thread* waiting_thread = NULL;
   if (cur_pcb->main_thread->tid == tid) {
     if (cur_pcb->is_main_exiting) {
-      cur->join_sema_ptr = &cur_pcb->main_thread->join_sema;
+      cur_pcb->main_thread->join_sema_ptr = &cur->join_sema;
       return tid;
     }
     waiting_thread = cur_pcb->main_thread;
