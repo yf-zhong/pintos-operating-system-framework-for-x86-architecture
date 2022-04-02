@@ -836,7 +836,7 @@ bool setup_thread(void (**eip)(void), void** esp, struct sfun_args *sa) {
     push_stack(esp, &sa->arg, sizeof(void*));
     push_stack(esp, &sa->tfun, sizeof(pthread_fun));
     //set eip to stub_fun
-    *eip = (void (*)(void)) &sa->sfun;
+    *eip = (void (*)(void)) sa->sfun;
     return true;
   }
   return false;
@@ -860,7 +860,7 @@ tid_t pthread_execute(stub_fun sf UNUSED, pthread_fun tf UNUSED, void* arg UNUSE
   sa.tfun = tf;
   sa.arg = arg;
   sa.pcb = t->pcb;
-  sa.exec_sema.value = 0;
+  sema_init(&sa.exec_sema, 0);
 
   //TODO: Add a lock to guarantee that only one function can run this at a time
   lock_acquire(&t->pcb->process_lock);
@@ -884,6 +884,10 @@ static void start_pthread(void* exec_ UNUSED) {
   struct intr_frame if_;
   bool success;
   
+  struct thread *t = thread_current();
+  t->pcb = exec->pcb;
+  list_push_back(&exec->pcb->thread_list, &t->proc_elem);
+
   memset(&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
@@ -896,6 +900,7 @@ static void start_pthread(void* exec_ UNUSED) {
   asm volatile("FRSTOR (%0)" : : "g"(&local_var) : "memory");
 
   success = setup_thread(&if_.eip, &if_.esp, exec);
+  if_.esp -= 4;
 
   sema_up(&exec->exec_sema);
 
@@ -918,6 +923,9 @@ static void start_pthread(void* exec_ UNUSED) {
 tid_t pthread_join(tid_t tid UNUSED) {
   struct thread* cur = thread_current();
   struct process* cur_pcb = cur->pcb;
+  if (cur->tid == tid) {
+    return TID_ERROR;
+  }
   for (struct list_elem* e = list_begin(&cur_pcb->died_thread_list); e != list_end(&cur_pcb->died_thread_list); e = list_next(e)) {
     struct died_thread *dt_ptr = list_entry(e, struct died_thread, elem);
     if (dt_ptr->tid == tid) {
@@ -925,11 +933,16 @@ tid_t pthread_join(tid_t tid UNUSED) {
     }
   }
   struct thread* waiting_thread = NULL;
-  for (struct list_elem* e = list_begin(&cur_pcb->thread_list); e != list_end(&cur_pcb->thread_list); e = list_next(e)) {
-    struct thread *t = list_entry(e, struct thread, proc_elem);
-    if (t->tid == tid) {
-      waiting_thread = t;
-      break;
+  if (cur_pcb->main_thread->tid == tid) {
+    waiting_thread = cur_pcb->main_thread;
+  }
+  else {
+    for (struct list_elem* e = list_begin(&cur_pcb->thread_list); e != list_end(&cur_pcb->thread_list); e = list_next(e)) {
+      struct thread *t = list_entry(e, struct thread, proc_elem);
+      if (t->tid == tid) {
+        waiting_thread = t;
+        break;
+      }
     }
   }
   if (waiting_thread != NULL && waiting_thread->status == THREAD_DYING) {
