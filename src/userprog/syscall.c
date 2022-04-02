@@ -390,7 +390,7 @@ void sys_sema_init(struct intr_frame* f, sema_t* sema, int val) {
 void sys_sema_down(struct intr_frame* f, sema_t* sema) {
   struct process* pcb = thread_current()->pcb;
   lock_acquire(&pcb->process_lock);
-  if (sema == NULL || (int) *sema < 0 || sema >= pcb->num_semas) {
+  if (sema == NULL || (int) *sema < 0 || *sema >= pcb->num_semas) {
     f->eax = false;
   } else {
     sema_down(&pcb->sema_table[(int) *sema]);
@@ -403,7 +403,7 @@ void sys_sema_down(struct intr_frame* f, sema_t* sema) {
 void sys_sema_up(struct intr_frame* f, sema_t* sema) {
   struct process* pcb = thread_current()->pcb;
   lock_acquire(&pcb->process_lock);
-  if (sema == NULL || (int) *sema < 0 || sema >= pcb->num_semas) {
+  if (sema == NULL || (int) *sema < 0 || *sema >= pcb->num_semas) {
     f->eax = false;
   } else {
     sema_up(&pcb->sema_table[(int)*sema]);

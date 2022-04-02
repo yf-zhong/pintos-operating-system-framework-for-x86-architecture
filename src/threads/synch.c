@@ -203,17 +203,14 @@ void lock_acquire(struct lock* lock) {
 
   enum intr_level old_level = intr_disable();
   struct thread* t = thread_current();
-  
-  if (lock->semaphore.value > 0) { // acquire success
-    lock->semaphore.highest_priority = t->priority;
-    list_push_back(&t->holding_locks, &lock->elem);
-  }
-  else { // acquire not success
+  if (lock->semaphore.value <= 0) {
     t->waiting_lock = lock;
     update_lock_priority(lock, t->priority);
   }
   sema_down(&lock->semaphore);
-  lock->holder = thread_current();
+  t->waiting_lock = NULL;
+  list_push_back(&t->holding_locks, &lock->elem);
+  lock->holder = t;
   intr_set_level(old_level);
 }
 
@@ -249,15 +246,7 @@ void lock_release(struct lock* lock) {
   struct thread* t = thread_current();
   list_remove(&lock->elem);
   t->priority = find_highest_priority();
-  struct thread *highest_thread = find_highest_thread(&lock->semaphore);
-  if (highest_thread != NULL) {
-    highest_thread->waiting_lock = NULL;
-    list_push_back(&highest_thread->holding_locks, &lock->elem);
-    lock->holder = highest_thread;
-  }
-  else {
-    lock->holder = NULL;
-  }
+  lock->holder = NULL;
   sema_up(&lock->semaphore);
   intr_set_level(old_level);
 
