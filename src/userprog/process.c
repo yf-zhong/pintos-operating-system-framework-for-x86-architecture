@@ -30,7 +30,15 @@ void decrement_ref_cnt(CHILD*);
 void decrement_children_ref_cnt(struct process*);
 void pcb_exit_setup(struct process*);
 void free_spa(SPA*);
-bool setup_thread(void (**eip)(void), void** esp);
+bool setup_thread(void (**eip)(void), void** esp, struct sfun_args* sa);
+
+/* helpers */
+static bool setup_thread_stack(void ** esp);
+void drop_all_holding_locks(void);
+void free_upage(void);
+void wakeup_waiting_thread(void);
+void remove_cur_from_thread_list(void);
+void join_all_nonmain_threads(void);
 
 /* helpers */
 static bool setup_thread_stack(void ** esp);
@@ -150,6 +158,7 @@ void pcb_init(struct thread* t, struct process *new_pcb, CHILD *new_c) {
   t->pcb->highest_upage = NULL;
   t->pcb->is_exiting = false;
   t->pcb->is_main_exiting = false;
+  new_pcb->main_thread = t;
 }
 
 /* A thread function that loads a user process and starts it
@@ -812,8 +821,25 @@ static bool setup_thread_stack(void ** esp) {
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. You may find it necessary to change the
    function signature. */
-bool setup_thread(void (**eip)(void) UNUSED, void** esp UNUSED) { 
-  return setup_thread_stack(esp);
+bool setup_thread(void (**eip)(void), void** esp, struct sfun_args *sa) {
+  // Activate page directory
+  process_activate();
+
+  if (setup_thread_stack(esp)) {
+    //push pthread_fun and void* arg
+    unsigned int allByteCount = sizeof(pthread_fun) + sizeof(void *);
+    unsigned int argByteCount = sizeof(uint8_t) * ((0b10000 - (allByteCount & 0b1111)) & 0b1111);
+    uint8_t* arg_zeros = calloc(argByteCount / sizeof(uint8_t), sizeof(uint8_t));
+    push_stack(esp, arg_zeros, sizeof(uint8_t) * argByteCount);
+    free(arg_zeros);
+    // no need to add NULL ptr after stack-algin
+    push_stack(esp, &sa->arg, sizeof(void*));
+    push_stack(esp, &sa->tfun, sizeof(pthread_fun));
+    //set eip to stub_fun
+    *eip = (void (*)(void)) &sa->sfun;
+    return true;
+  }
+  return false;
 }
 
 /* Starts a new thread with a new user stack running SF, which takes
@@ -825,7 +851,27 @@ bool setup_thread(void (**eip)(void) UNUSED, void** esp UNUSED) {
    This function will be implemented in Project 2: Multithreading and
    should be similar to process_execute (). For now, it does nothing.
    */
-tid_t pthread_execute(stub_fun sf UNUSED, pthread_fun tf UNUSED, void* arg UNUSED) { return -1; }
+tid_t pthread_execute(stub_fun sf UNUSED, pthread_fun tf UNUSED, void* arg UNUSED) {
+  struct sfun_args sa;
+  tid_t tid;
+
+  struct thread* t = thread_current();
+  sa.sfun = sf;
+  sa.tfun = tf;
+  sa.arg = arg;
+  sa.pcb = t->pcb;
+  sa.exec_sema.value = 0;
+
+  //TODO: Add a lock to guarantee that only one function can run this at a time
+  lock_acquire(&t->pcb->process_lock);
+  tid = thread_create("", PRI_DEFAULT, start_pthread, &sa);
+  lock_release(&t->pcb->process_lock);
+  if (tid == TID_ERROR) {
+    return tid;
+  }
+  sema_down(&sa.exec_sema);
+  return tid;
+}
 
 /* A thread function that creates a new user thread and starts it
    running. Responsible for adding itself to the list of threads in
@@ -833,7 +879,34 @@ tid_t pthread_execute(stub_fun sf UNUSED, pthread_fun tf UNUSED, void* arg UNUSE
 
    This function will be implemented in Project 2: Multithreading and
    should be similar to start_process (). For now, it does nothing. */
-static void start_pthread(void* exec_ UNUSED) {}
+static void start_pthread(void* exec_ UNUSED) {
+  struct sfun_args* exec = (struct sfun_args*)exec_;
+  struct intr_frame if_;
+  bool success;
+  
+  memset(&if_, 0, sizeof if_);
+  if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
+  if_.cs = SEL_UCSEG;
+  if_.eflags = FLAG_IF | FLAG_MBS;
+
+  int local_var[27];
+  asm volatile("FSAVE (%0)" : : "g"(&local_var) : "memory");
+  asm volatile("FNINIT" : : : "memory");
+  asm volatile("FSAVE (%0)" : : "g"(&if_.fpu) : "memory");
+  asm volatile("FRSTOR (%0)" : : "g"(&local_var) : "memory");
+
+  success = setup_thread(&if_.eip, &if_.esp, exec);
+
+  sema_up(&exec->exec_sema);
+
+  if (!success) {
+    thread_exit();
+  }
+
+  asm volatile("movl %0, %%esp; jmp intr_exit" : : "g"(&if_) : "memory");
+  NOT_REACHED();
+}
+
 
 /* Waits for thread with TID to die, if that thread was spawned
    in the same process and has not been waited on yet. Returns TID on
@@ -897,7 +970,7 @@ void free_upage() {
 void wakeup_waiting_thread() {
   struct thread* cur = thread_current();
   if (cur->join_sema_ptr != NULL) {
-    sema_up(&cur->join_sema_ptr);
+    sema_up(cur->join_sema_ptr);
   }
 }
 

@@ -310,7 +310,7 @@ void sys_pthread_create(struct intr_frame* f, stub_fun sf, pthread_fun pf, void 
   return;
 }
 
-void sys_pthread_exit(struct intr_frame* f) {
+void sys_pthread_exit(struct intr_frame* f UNUSED) {
   struct thread* t = thread_current();
   if (is_main_thread(t, t->pcb)) {
     pthread_exit_main();
@@ -329,7 +329,7 @@ void sys_pthread_join(struct intr_frame* f, tid_t tid) {
 void sys_lock_init(struct intr_frame* f, lock_t* lock) {
   struct process* pcb = thread_current()->pcb;
   lock_acquire(&pcb->process_lock);
-  if (pcb->num_locks < 0 || pcb->num_locks > CHAR_MAX) {
+  if (pcb->num_locks < 0 || pcb->num_locks > CHAR_MAX || lock == NULL) {
     f->eax = false;
   }
   else {
@@ -343,13 +343,10 @@ void sys_lock_init(struct intr_frame* f, lock_t* lock) {
 }
 
 void sys_lock_acquire(struct intr_frame* f, lock_t* lock) {
-  if (*lock < 0) {
-    sys_exit(f, -1);
-  }
   struct thread* t = thread_current();
   struct process* pcb = t->pcb;
   lock_acquire(&pcb->process_lock);
-  if (*lock < 0 || *lock >= pcb->num_locks || pcb->lock_table[(int)*lock].holder == t) {
+  if (lock == NULL || *lock < 0 || *lock >= pcb->num_locks || pcb->lock_table[(int)*lock].holder == t) {
     f->eax = false;
   }
   else {
@@ -361,13 +358,10 @@ void sys_lock_acquire(struct intr_frame* f, lock_t* lock) {
 }
 
 void sys_lock_release(struct intr_frame* f, lock_t* lock) {
-  if (*lock < 0) {
-    sys_exit(f, -1);
-  }
   struct thread* t = thread_current();
   struct process* pcb = t->pcb;
   lock_acquire(&pcb->process_lock);
-  if (*lock < 0 || *lock >= pcb->num_locks || pcb->lock_table[(int) *lock].holder != t) {
+  if (lock == NULL || *lock < 0 || *lock >= pcb->num_locks || pcb->lock_table[(int) *lock].holder != t) {
     f->eax = false;
   }
   else {
@@ -381,7 +375,7 @@ void sys_lock_release(struct intr_frame* f, lock_t* lock) {
 void sys_sema_init(struct intr_frame* f, sema_t* sema, int val) {
   struct process* pcb = thread_current()->pcb;
   lock_acquire(&pcb->process_lock);
-  if (val < 0 || pcb->num_semas > CHAR_MAX) {
+  if (sema == NULL || val < 0 || pcb->num_semas > CHAR_MAX) {
     f->eax = false;
   } else {
     *sema = pcb->num_semas;
@@ -396,7 +390,7 @@ void sys_sema_init(struct intr_frame* f, sema_t* sema, int val) {
 void sys_sema_down(struct intr_frame* f, sema_t* sema) {
   struct process* pcb = thread_current()->pcb;
   lock_acquire(&pcb->process_lock);
-  if ((int) *sema < 0 || sema >= pcb->num_semas) {
+  if (sema == NULL || (int) *sema < 0 || *sema >= pcb->num_semas) {
     f->eax = false;
   } else {
     sema_down(&pcb->sema_table[(int) *sema]);
@@ -409,7 +403,7 @@ void sys_sema_down(struct intr_frame* f, sema_t* sema) {
 void sys_sema_up(struct intr_frame* f, sema_t* sema) {
   struct process* pcb = thread_current()->pcb;
   lock_acquire(&pcb->process_lock);
-  if ((int) *sema < 0 || sema >= pcb->num_semas) {
+  if (sema == NULL || (int) *sema < 0 || *sema >= pcb->num_semas) {
     f->eax = false;
   } else {
     sema_up(&pcb->sema_table[(int)*sema]);
