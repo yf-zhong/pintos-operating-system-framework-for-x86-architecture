@@ -34,6 +34,7 @@ struct sfun_args {
 
 struct died_thread {
   tid_t tid;
+  bool is_joined;
   struct list_elem elem;
 };
 
