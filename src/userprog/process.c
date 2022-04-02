@@ -47,6 +47,7 @@ void free_upage(void);
 void wakeup_waiting_thread(void);
 void remove_cur_from_thread_list(void);
 void join_all_nonmain_threads(void);
+void remove_died_thread_list(struct process*);
 
 /* Initializes user programs in the system by ensuring the main
    thread has a minimal PCB so that it can execute and wait for
@@ -576,7 +577,6 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
     printf("load: %s: open failed\n", file_name);
     goto done;
   }
-  // file_deny_write(file);
   
   /* Read and verify executable header. */
   if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr ||
