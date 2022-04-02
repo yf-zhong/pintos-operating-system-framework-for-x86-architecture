@@ -928,6 +928,10 @@ tid_t pthread_join(tid_t tid UNUSED) {
   }
   struct thread* waiting_thread = NULL;
   if (cur_pcb->main_thread->tid == tid) {
+    if (cur_pcb->is_main_exiting) {
+      cur->join_sema_ptr = &cur_pcb->main_thread->join_sema;
+      return tid;
+    }
     waiting_thread = cur_pcb->main_thread;
   }
   else {
@@ -1037,6 +1041,9 @@ void pthread_exit_main(void) {
   if (!is_main_thread(cur, cur->pcb)) {
     pthread_exit();
   }
+  lock_acquire(&cur_pcb->process_lock);
+  cur_pcb->is_main_exiting = true;
+  lock_release(&cur_pcb->process_lock);
   wakeup_waiting_thread();
   drop_all_holding_locks();
   join_all_nonmain_threads();
