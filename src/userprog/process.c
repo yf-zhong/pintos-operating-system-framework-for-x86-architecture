@@ -845,6 +845,9 @@ static void start_pthread(void* exec_ UNUSED) {}
 tid_t pthread_join(tid_t tid UNUSED) {
   struct thread* cur = thread_current();
   struct process* cur_pcb = cur->pcb;
+  if (cur->tid == tid) {
+    return TID_ERROR;
+  }
   for (struct list_elem* e = list_begin(&cur_pcb->died_thread_list); e != list_end(&cur_pcb->died_thread_list); e = list_next(e)) {
     struct died_thread *dt_ptr = list_entry(e, struct died_thread, elem);
     if (dt_ptr->tid == tid) {
