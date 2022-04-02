@@ -922,6 +922,9 @@ static void start_pthread(void* exec_ UNUSED) {
 tid_t pthread_join(tid_t tid UNUSED) {
   struct thread* cur = thread_current();
   struct process* cur_pcb = cur->pcb;
+  if (cur->tid == tid) {
+    return TID_ERROR;
+  }
   for (struct list_elem* e = list_begin(&cur_pcb->died_thread_list); e != list_end(&cur_pcb->died_thread_list); e = list_next(e)) {
     struct died_thread *dt_ptr = list_entry(e, struct died_thread, elem);
     if (dt_ptr->tid == tid) {
@@ -929,11 +932,16 @@ tid_t pthread_join(tid_t tid UNUSED) {
     }
   }
   struct thread* waiting_thread = NULL;
-  for (struct list_elem* e = list_begin(&cur_pcb->thread_list); e != list_end(&cur_pcb->thread_list); e = list_next(e)) {
-    struct thread *t = list_entry(e, struct thread, proc_elem);
-    if (t->tid == tid) {
-      waiting_thread = t;
-      break;
+  if (cur_pcb->main_thread->tid == tid) {
+    waiting_thread = cur_pcb->main_thread;
+  }
+  else {
+    for (struct list_elem* e = list_begin(&cur_pcb->thread_list); e != list_end(&cur_pcb->thread_list); e = list_next(e)) {
+      struct thread *t = list_entry(e, struct thread, proc_elem);
+      if (t->tid == tid) {
+        waiting_thread = t;
+        break;
+      }
     }
   }
   if (waiting_thread != NULL && waiting_thread->status == THREAD_DYING) {
