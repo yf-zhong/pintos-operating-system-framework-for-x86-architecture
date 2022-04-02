@@ -32,6 +32,11 @@ struct sfun_args {
   struct process* pcb;
 };
 
+struct died_thread {
+  tid_t tid;
+  struct list_elem elem;
+};
+
 typedef struct child {
   pid_t pid;
   struct semaphore exec_sema;
@@ -62,8 +67,8 @@ struct process {
   struct list file_descriptor_table; /* All the files opened in current process */
 
   /* for project 2 task 3 */
-  int next_tid;
   struct list thread_list;    // save list of threads belongs to this process
+  struct list died_thread_list; // save list of tid which corresponds to a died thread
   struct lock lock_table[CHAR_MAX + 1]; // an array to store all the locks for this process
   int num_locks;    
   struct semaphore sema_table[CHAR_MAX + 1];// an array to store all the semaphores for this process
