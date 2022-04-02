@@ -876,11 +876,10 @@ tid_t pthread_execute(stub_fun sf UNUSED, pthread_fun tf UNUSED, void* arg UNUSE
 static void start_pthread(void* exec_ UNUSED) {
   struct sfun_args* exec = (struct sfun_args*)exec_;
   struct intr_frame if_;
-  bool success;
+  bool success = false;
   
   struct thread *t = thread_current();
   t->pcb = exec->pcb;
-  list_push_back(&exec->pcb->thread_list, &t->proc_elem);
 
   memset(&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -896,9 +895,14 @@ static void start_pthread(void* exec_ UNUSED) {
   success = setup_thread(&if_.eip, &if_.esp, exec);
   if_.esp -= 4;
 
+  if (success) {
+    list_push_back(&exec->pcb->thread_list, &t->proc_elem);
+  }
+
   sema_up(&exec->exec_sema);
 
   if (!success) {
+    msg("hi\n");
     thread_exit();
   }
 
@@ -929,7 +933,7 @@ tid_t pthread_join(tid_t tid UNUSED) {
   struct thread* waiting_thread = NULL;
   if (cur_pcb->main_thread->tid == tid) {
     if (cur_pcb->is_main_exiting) {
-      cur->join_sema_ptr = &cur_pcb->main_thread->join_sema;
+      cur_pcb->main_thread->join_sema_ptr = &cur->join_sema;
       return tid;
     }
     waiting_thread = cur_pcb->main_thread;
@@ -951,6 +955,7 @@ tid_t pthread_join(tid_t tid UNUSED) {
   }
   waiting_thread->join_sema_ptr = &cur->join_sema;  // can use thread_block?
   sema_down(&cur->join_sema);
+  return tid;
 }
 
 /* Free all current thread's holding locks */
@@ -966,6 +971,7 @@ void free_upage() {
   struct thread* cur = thread_current();
   struct process* cur_pcb = cur->pcb;
   lock_acquire(&cur_pcb->process_lock);
+  palloc_free_page(pagedir_get_page(cur_pcb->pagedir, cur->upage));
   pagedir_clear_page(cur_pcb->pagedir, cur->upage);
   lock_release(&cur_pcb->process_lock);
 }
