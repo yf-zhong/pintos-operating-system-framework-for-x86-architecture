@@ -818,7 +818,7 @@ bool setup_thread(void (**eip)(void), void** esp, struct sfun_args *sa) {
     push_stack(esp, &sa->arg, sizeof(void*));
     push_stack(esp, &sa->tfun, sizeof(pthread_fun));
     //set eip to stub_fun
-    *eip = (void (*)(void)) &sa->sfun;
+    *eip = (void (*)(void)) sa->sfun;
     return true;
   }
   return false;
@@ -842,7 +842,7 @@ tid_t pthread_execute(stub_fun sf UNUSED, pthread_fun tf UNUSED, void* arg UNUSE
   sa.tfun = tf;
   sa.arg = arg;
   sa.pcb = t->pcb;
-  sa.exec_sema.value = 0;
+  sema_init(&sa.exec_sema, 0);
 
   //TODO: Add a lock to guarantee that only one function can run this at a time
   lock_acquire(&t->pcb->process_lock);
@@ -881,6 +881,7 @@ static void start_pthread(void* exec_ UNUSED) {
   asm volatile("FRSTOR (%0)" : : "g"(&local_var) : "memory");
 
   success = setup_thread(&if_.eip, &if_.esp, exec);
+  if_.esp -= 4;
 
   sema_up(&exec->exec_sema);
 
