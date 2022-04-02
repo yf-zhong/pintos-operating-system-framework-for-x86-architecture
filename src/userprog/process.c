@@ -1037,10 +1037,16 @@ void join_all_nonmain_threads() {
    now, it does nothing. */
 void pthread_exit_main(void) {
   struct thread* cur = thread_current();
+  struct process* cur_pcb = cur->pcb;
   // redirect all non main threads to pthread_exit()
   if (!is_main_thread(cur, cur->pcb)) {
     pthread_exit();
   }
+  lock_acquire(&cur_pcb->process_lock);
+  if (!cur_pcb->is_exiting) {
+    cur_pcb->curr_as_child->exit_status = 0;
+  }
+  lock_release(&cur_pcb->process_lock);
   wakeup_waiting_thread();
   drop_all_holding_locks();
   join_all_nonmain_threads();
