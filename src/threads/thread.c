@@ -481,9 +481,9 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   list_init(&t->holding_locks);
   t->waiting_lock = NULL;
 
-  /* project 2 task 3 */
   sema_init(&t->join_sema, 0);
   t->join_sema_ptr = NULL;
+  t->upage = NULL;
 
   old_level = intr_disable();
   list_push_back(&all_list, &t->allelem);
