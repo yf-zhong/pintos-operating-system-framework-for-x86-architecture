@@ -39,14 +39,7 @@ void free_upage(void);
 void wakeup_waiting_thread(void);
 void remove_cur_from_thread_list(void);
 void join_all_nonmain_threads(void);
-
-/* helpers */
-static bool setup_thread_stack(void ** esp);
-void drop_all_holding_locks(void);
-void free_upage(void);
-void wakeup_waiting_thread(void);
-void remove_cur_from_thread_list(void);
-void join_all_nonmain_threads(void);
+void remove_died_thread_list(struct process*);
 
 /* Initializes user programs in the system by ensuring the main
    thread has a minimal PCB so that it can execute and wait for
@@ -307,6 +300,7 @@ void remove_died_thread_list(struct process* pcb) {
 
 void pcb_exit_setup(struct process* pcb_to_free) {
   pcb_to_free->curr_as_child->is_exited = true;
+  remove_died_thread_list(pcb_to_free);
   decrement_children_ref_cnt(pcb_to_free);
   decrement_ref_cnt(pcb_to_free->curr_as_child);
   sema_up(&pcb_to_free->curr_as_child->wait_sema);
@@ -929,7 +923,7 @@ tid_t pthread_join(tid_t tid UNUSED) {
   for (struct list_elem* e = list_begin(&cur_pcb->died_thread_list); e != list_end(&cur_pcb->died_thread_list); e = list_next(e)) {
     struct died_thread *dt_ptr = list_entry(e, struct died_thread, elem);
     if (dt_ptr->tid == tid) {
-      return tid;
+      return dt_ptr->is_joined ? TID_ERROR : tid;
     }
   }
   struct thread* waiting_thread = NULL;
@@ -984,6 +978,7 @@ void remove_cur_from_thread_list() {
   struct process* cur_pcb = cur->pcb;
   struct died_thread* dt_ptr = (struct died_thread*) malloc(sizeof(struct died_thread));
   dt_ptr->tid = cur->tid;
+  dt_ptr->is_joined = cur->join_sema_ptr != NULL;
   lock_acquire(&cur_pcb->process_lock);
   list_remove(&cur->proc_elem);
   list_push_back(&cur_pcb->died_thread_list, &dt_ptr->elem);
@@ -1042,14 +1037,15 @@ void pthread_exit_main(void) {
   if (!is_main_thread(cur, cur->pcb)) {
     pthread_exit();
   }
-  lock_acquire(&cur_pcb->process_lock);
-  if (!cur_pcb->is_exiting) {
-    cur_pcb->curr_as_child->exit_status = 0;
-  }
-  lock_release(&cur_pcb->process_lock);
   wakeup_waiting_thread();
   drop_all_holding_locks();
   join_all_nonmain_threads();
+  // if no other threads call process_exit(), set exit status to 0 (no error)
+  if (!cur_pcb->is_exiting) {
+    cur_pcb->is_exiting = true;
+    cur_pcb->is_main_exiting = true;
+    cur_pcb->curr_as_child->exit_status = 0;
+  }
   // all non-main threads are exited, exit the process
   // the exit status is set by thread that calls syscall exit 
   // the exit status is -1 if no thread call syscall exit
