@@ -511,8 +511,6 @@ static struct thread* thread_schedule_fifo(void) {
 
 /* Strict priority scheduler */
 static struct thread* thread_schedule_prio(void) {
-  // struct list_elem* result_e = list_begin(&fifo_ready_list);
-  // struct thread* result = list_entry(result_e, struct thread, elem);
   struct thread* result = idle_thread;
   
   struct list_elem* e;
