@@ -29,7 +29,6 @@ CHILD* find_child(pid_t);
 void decrement_ref_cnt(CHILD*);
 void decrement_children_ref_cnt(struct process*);
 void pcb_exit_setup(struct process*);
-void free_spa(SPA*);
 bool setup_thread(void (**eip)(void), void** esp, struct sfun_args* sa);
 
 /* helpers */
@@ -77,12 +76,6 @@ CHILD* new_child() {
   return cptr;
 }
 
-void free_spa(SPA* spaptr) {
-  palloc_free_page(spaptr->file_name);
-  palloc_free_page(spaptr->new_c);
-  palloc_free_page(spaptr);
-}
-
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -109,22 +102,20 @@ pid_t process_execute(const char* file_name) {
   char** saveptr = &file_name_cpy;
   char* prog_name = strtok_r(file_name_cpy, " ", saveptr);
 
-
+  
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create(prog_name, PRI_DEFAULT, start_process, spaptr);
-  sema_down(&spaptr->new_c->exec_sema);
+  if (tid != TID_ERROR) {
+    sema_down(&spaptr->new_c->exec_sema);
+  }
   free(cpy_base);
   struct process* pcb = thread_current()->pcb;
   list_push_front(&pcb->children, &spaptr->new_c->elem);
-  if (tid == TID_ERROR) {
-    free_spa(spaptr);
+  if (spaptr->new_c->is_exited && spaptr->new_c->exit_status == ERROR) {
+    tid = -1;
   }
-  else {
-    if (spaptr->new_c->is_exited && spaptr->new_c->exit_status == ERROR) {
-      tid = -1;
-    }
-    palloc_free_page(spaptr);
-  }
+  palloc_free_page(spaptr->file_name);
+  palloc_free_page(spaptr);
   return tid;
 }
 
@@ -211,10 +202,12 @@ static void start_process(void* spaptr_) {
     t->pcb = NULL;
     free(pcb_to_free);
   }
+  if (!pcb_success) {
+    spaptr->new_c->exit_status = ERROR;
+    spaptr->new_c->is_exited = true;
+    decrement_ref_cnt(spaptr->new_c);
+  }
   sema_up(&new_c->exec_sema);
-
-  /* Clean up. Exit on failure or jump to userspace */
-  palloc_free_page(spaptr->file_name);
   if (!success) {
     thread_exit();
   }
@@ -902,7 +895,6 @@ static void start_pthread(void* exec_ UNUSED) {
   sema_up(&exec->exec_sema);
 
   if (!success) {
-    msg("hi\n");
     thread_exit();
   }
 
