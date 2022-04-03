@@ -32,6 +32,8 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+struct thread* find_highest_thread(struct semaphore*);
+
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -201,17 +203,14 @@ void lock_acquire(struct lock* lock) {
 
   enum intr_level old_level = intr_disable();
   struct thread* t = thread_current();
-  
-  if (lock->semaphore.value > 0) { // acquire success
-    lock->semaphore.highest_priority = t->priority;
-    list_push_back(&t->holding_locks, &lock->elem);
-  }
-  else { // acquire not success
+  if (lock->semaphore.value <= 0) {
     t->waiting_lock = lock;
     update_lock_priority(lock, t->priority);
   }
   sema_down(&lock->semaphore);
-  lock->holder = thread_current();
+  t->waiting_lock = NULL;
+  list_push_back(&t->holding_locks, &lock->elem);
+  lock->holder = t;
   intr_set_level(old_level);
 }
 
@@ -247,6 +246,7 @@ void lock_release(struct lock* lock) {
   struct thread* t = thread_current();
   list_remove(&lock->elem);
   t->priority = find_highest_priority();
+<<<<<<< HEAD
   struct thread *highest_thread = find_highest_thread(&lock->semaphore);
   if (highest_thread != NULL) {
     highest_thread->waiting_lock = NULL;
@@ -256,6 +256,9 @@ void lock_release(struct lock* lock) {
   else {
     lock->holder = NULL;
   }
+=======
+  lock->holder = NULL;
+>>>>>>> 284031259992dfa7df305cb35d21f25172770280
   sema_up(&lock->semaphore);
   intr_set_level(old_level);
 
@@ -403,9 +406,11 @@ void cond_signal(struct condition* cond, struct lock* lock UNUSED) {
         highest_sema = se;
         highest_priority = highest_sema->semaphore.highest_priority;
       }
-        
     }
-    sema_up(&highest_sema->semaphore);
+    if (highest_sema != NULL) {
+      list_remove(&highest_sema->elem);
+      sema_up(&highest_sema->semaphore);
+    }
   }
 }
 

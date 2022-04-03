@@ -92,12 +92,21 @@ struct thread {
   /* Shared between thread.c and synch.c. */
   struct list_elem elem; /* List element. */
 
+  /* For project 2 task 1: efficient alarm clock */
+  int64_t wakeup_time;
+  struct list_elem sleep_elem;
 
-  /* for project 2 task 2: strict priority scheduler */
+  /* For project 2 task 2: strict priority scheduler */
   int priority;
   int base_priority;
   struct list holding_locks;
   struct lock *waiting_lock;
+
+  /* For project 2 task 3: user thread */
+  struct semaphore join_sema;      /* Default 0 when thread created */
+  struct semaphore* join_sema_ptr; /* Default -1 when no thread tries to join current thread */
+  void* upage;
+  struct list_elem proc_elem;
 
 #ifdef USERPROG
   /* Owned by process.c. */
@@ -107,6 +116,9 @@ struct thread {
   /* Owned by thread.c. */
   unsigned magic; /* Detects stack overflow. */
 };
+
+/* for storing all sleeping threads */
+struct list sleep_theads_list;
 
 /* Types of scheduler that the user can request the kernel
  * use to schedule threads at runtime. */
