@@ -62,7 +62,7 @@ void userprog_init(void) {
 }
 
 CHILD* new_child() {
-  CHILD* cptr = (CHILD*) palloc_get_page(0);
+  CHILD* cptr = malloc(sizeof(CHILD));
   if (cptr == NULL) {
     return NULL;
   }
@@ -90,8 +90,14 @@ pid_t process_execute(const char* file_name) {
   if (spaptr == NULL)
     return TID_ERROR;
   spaptr->file_name = palloc_get_page(0);
+  if (spaptr->file_name == NULL) {
+    palloc_free_page(spaptr);
+    return TID_ERROR;
+  }
   spaptr->new_c = new_child();
-  if (spaptr->file_name == NULL || spaptr->new_c == NULL) {
+  if (spaptr->new_c == NULL) {
+    palloc_free_page(spaptr->file_name);
+    palloc_free_page(spaptr);
     return TID_ERROR;
   }
   strlcpy(spaptr->file_name, file_name, PGSIZE - sizeof(spaptr->new_c));
@@ -105,7 +111,13 @@ pid_t process_execute(const char* file_name) {
   
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create(prog_name, PRI_DEFAULT, start_process, spaptr);
-  if (tid != TID_ERROR) {
+  // if can't create new thread, set children as exited, no need to sema_down
+  if (tid == TID_ERROR) {
+    spaptr->new_c->exit_status = ERROR;
+    spaptr->new_c->is_exited = true;
+    decrement_ref_cnt(spaptr->new_c);
+  }
+  else {
     sema_down(&spaptr->new_c->exec_sema);
   }
   struct process* pcb = thread_current()->pcb;
@@ -259,7 +271,8 @@ void decrement_ref_cnt(CHILD* cptr) {
   lock_acquire(&cptr->ref_lock);
   cptr->ref_cnt--;
   if (cptr->ref_cnt == 0) {
-    palloc_free_page(cptr);
+    lock_release(&cptr->ref_lock);
+    free(cptr);
     return;
   }
   else {
@@ -332,6 +345,7 @@ void process_exit(void) {
       pthread_exit_main();
     }
   }
+  lock_release(&cur_pcb->process_lock);
   // cur_pcb is NULL or the second time main thread enters process_exit()
 
   /* If this thread does not have a PCB, don't worry */
@@ -795,6 +809,10 @@ static bool setup_thread_stack(void ** esp) {
     bool success = false;
     int i = 0;
     while (!success) {
+      if (i >= 128) {
+        palloc_free_page(kpage);
+        return false;
+      }
       i += 1;
       success = install_page(((uint8_t*)PHYS_BASE) - i * PGSIZE, kpage, true);
     }
@@ -822,6 +840,9 @@ bool setup_thread(void (**eip)(void), void** esp, struct sfun_args *sa) {
     unsigned int allByteCount = sizeof(pthread_fun) + sizeof(void *);
     unsigned int argByteCount = sizeof(uint8_t) * ((0b10000 - (allByteCount & 0b1111)) & 0b1111);
     uint8_t* arg_zeros = calloc(argByteCount / sizeof(uint8_t), sizeof(uint8_t));
+    if (arg_zeros == NULL) {
+      return false;
+    }
     push_stack(esp, arg_zeros, sizeof(uint8_t) * argByteCount);
     free(arg_zeros);
     // no need to add NULL ptr after stack-algin
@@ -894,7 +915,9 @@ static void start_pthread(void* exec_ UNUSED) {
   if_.esp -= 4;
 
   if (success) {
+    lock_acquire(&exec->pcb->process_lock);
     list_push_back(&exec->pcb->thread_list, &t->proc_elem);
+    lock_release(&exec->pcb->process_lock);
   }
 
   sema_up(&exec->exec_sema);
@@ -950,7 +973,7 @@ tid_t pthread_join(tid_t tid UNUSED) {
   if (waiting_thread == NULL || waiting_thread->join_sema_ptr != NULL) {
     return TID_ERROR;
   }
-  waiting_thread->join_sema_ptr = &cur->join_sema;  // can use thread_block?
+  waiting_thread->join_sema_ptr = &cur->join_sema;
   sema_down(&cur->join_sema);
   return tid;
 }
@@ -1050,6 +1073,7 @@ void pthread_exit_main(void) {
   wakeup_waiting_thread();
   drop_all_holding_locks();
   join_all_nonmain_threads();
+  free_upage();
   // if no other threads call process_exit(), set exit status to 0 (no error)
   if (!cur_pcb->is_exiting) {
     cur_pcb->is_exiting = true;
