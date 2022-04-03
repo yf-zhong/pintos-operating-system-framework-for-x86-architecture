@@ -92,6 +92,10 @@ struct thread {
   /* Shared between thread.c and synch.c. */
   struct list_elem elem; /* List element. */
 
+  /* For project 2 task 1: efficient alarm clock */
+  int64_t wakeup_time;
+  struct list_elem sleep_elem;
+
   /* For project 2 task 2: strict priority scheduler */
   int priority;
   int base_priority;
@@ -112,6 +116,9 @@ struct thread {
   /* Owned by thread.c. */
   unsigned magic; /* Detects stack overflow. */
 };
+
+/* for storing all sleeping threads */
+struct list sleep_theads_list;
 
 /* User page */
 struct upage {
