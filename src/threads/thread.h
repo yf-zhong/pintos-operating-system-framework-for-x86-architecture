@@ -113,12 +113,6 @@ struct thread {
   unsigned magic; /* Detects stack overflow. */
 };
 
-/* User page */
-struct upage {
-  void* upage;
-  struct list_elem elem;
-};
-
 /* Types of scheduler that the user can request the kernel
  * use to schedule threads at runtime. */
 enum sched_policy {

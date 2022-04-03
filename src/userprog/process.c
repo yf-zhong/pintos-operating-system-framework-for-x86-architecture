@@ -105,7 +105,13 @@ pid_t process_execute(const char* file_name) {
   
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create(prog_name, PRI_DEFAULT, start_process, spaptr);
-  if (tid != TID_ERROR) {
+  // if can't create new thread, set children as exited, no need to sema_down
+  if (tid == TID_ERROR) {
+    spaptr->new_c->exit_status = ERROR;
+    spaptr->new_c->is_exited = true;
+    decrement_ref_cnt(spaptr->new_c);
+  }
+  else {
     sema_down(&spaptr->new_c->exec_sema);
   }
   struct process* pcb = thread_current()->pcb;
@@ -332,6 +338,7 @@ void process_exit(void) {
       pthread_exit_main();
     }
   }
+  lock_release(&cur_pcb->process_lock);
   // cur_pcb is NULL or the second time main thread enters process_exit()
 
   /* If this thread does not have a PCB, don't worry */
@@ -894,7 +901,9 @@ static void start_pthread(void* exec_ UNUSED) {
   if_.esp -= 4;
 
   if (success) {
+    lock_acquire(&exec->pcb->process_lock);
     list_push_back(&exec->pcb->thread_list, &t->proc_elem);
+    lock_release(&exec->pcb->process_lock);
   }
 
   sema_up(&exec->exec_sema);
@@ -950,7 +959,7 @@ tid_t pthread_join(tid_t tid UNUSED) {
   if (waiting_thread == NULL || waiting_thread->join_sema_ptr != NULL) {
     return TID_ERROR;
   }
-  waiting_thread->join_sema_ptr = &cur->join_sema;  // can use thread_block?
+  waiting_thread->join_sema_ptr = &cur->join_sema;
   sema_down(&cur->join_sema);
   return tid;
 }
@@ -1050,6 +1059,7 @@ void pthread_exit_main(void) {
   wakeup_waiting_thread();
   drop_all_holding_locks();
   join_all_nonmain_threads();
+  free_upage();
   // if no other threads call process_exit(), set exit status to 0 (no error)
   if (!cur_pcb->is_exiting) {
     cur_pcb->is_exiting = true;
