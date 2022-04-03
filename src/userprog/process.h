@@ -62,7 +62,6 @@ struct process {
   struct thread* main_thread; /* Pointer to main thread */
   struct list children;
   struct child* curr_as_child;
-  char *file_name;
   struct file* curr_executable;
   int cur_fd;                 /* The fd number assigned to new file */
   struct list file_descriptor_table; /* All the files opened in current process */
@@ -75,7 +74,6 @@ struct process {
   struct semaphore sema_table[CHAR_MAX + 1];// an array to store all the semaphores for this process
   int num_semas;
   struct lock process_lock;
-  void* highest_upage;
   bool is_exiting; // check everytime after switch_threads, if true, exit the current thread
   bool is_main_exiting;
 };

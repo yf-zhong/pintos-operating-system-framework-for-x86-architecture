@@ -29,7 +29,6 @@ CHILD* find_child(pid_t);
 void decrement_ref_cnt(CHILD*);
 void decrement_children_ref_cnt(struct process*);
 void pcb_exit_setup(struct process*);
-void free_spa(SPA*);
 bool setup_thread(void (**eip)(void), void** esp, struct sfun_args* sa);
 
 /* helpers */
@@ -77,12 +76,6 @@ CHILD* new_child() {
   return cptr;
 }
 
-void free_spa(SPA* spaptr) {
-  palloc_free_page(spaptr->file_name);
-  palloc_free_page(spaptr->new_c);
-  palloc_free_page(spaptr);
-}
-
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -102,29 +95,26 @@ pid_t process_execute(const char* file_name) {
     return TID_ERROR;
   }
   strlcpy(spaptr->file_name, file_name, PGSIZE - sizeof(spaptr->new_c));
+
+  char prog_name[16];
+  int i = 0;
+  for (i = 0; file_name[i] != ' ' && file_name[i] != '\0'; i++) {
+    prog_name[i] = file_name[i];
+  }
+  prog_name[i] = '\0';
   
-  char* file_name_cpy = (char*) malloc(sizeof(char) * (strlen(file_name) + 1));
-  char* cpy_base = file_name_cpy;
-  strlcpy(file_name_cpy, file_name, strlen(file_name) + 1);
-  char** saveptr = &file_name_cpy;
-  char* prog_name = strtok_r(file_name_cpy, " ", saveptr);
-
-
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create(prog_name, PRI_DEFAULT, start_process, spaptr);
-  sema_down(&spaptr->new_c->exec_sema);
-  free(cpy_base);
+  if (tid != TID_ERROR) {
+    sema_down(&spaptr->new_c->exec_sema);
+  }
   struct process* pcb = thread_current()->pcb;
   list_push_front(&pcb->children, &spaptr->new_c->elem);
-  if (tid == TID_ERROR) {
-    free_spa(spaptr);
+  if (spaptr->new_c->is_exited && spaptr->new_c->exit_status == ERROR) {
+    tid = -1;
   }
-  else {
-    if (spaptr->new_c->is_exited && spaptr->new_c->exit_status == ERROR) {
-      tid = -1;
-    }
-    palloc_free_page(spaptr);
-  }
+  palloc_free_page(spaptr->file_name);
+  palloc_free_page(spaptr);
   return tid;
 }
 
@@ -148,7 +138,6 @@ void pcb_init(struct thread* t, struct process *new_pcb, CHILD *new_c) {
   t->pcb->num_locks = 0;
   t->pcb->num_semas = 0;
   lock_init(&t->pcb->process_lock);
-  t->pcb->highest_upage = NULL;
   t->pcb->is_exiting = false;
   t->pcb->is_main_exiting = false;
   new_pcb->main_thread = t;
@@ -211,10 +200,12 @@ static void start_process(void* spaptr_) {
     t->pcb = NULL;
     free(pcb_to_free);
   }
+  if (!pcb_success) {
+    spaptr->new_c->exit_status = ERROR;
+    spaptr->new_c->is_exited = true;
+    decrement_ref_cnt(spaptr->new_c);
+  }
   sema_up(&new_c->exec_sema);
-
-  /* Clean up. Exit on failure or jump to userspace */
-  palloc_free_page(spaptr->file_name);
   if (!success) {
     thread_exit();
   }
@@ -474,7 +465,7 @@ static bool load_segment(struct file* file, off_t ofs, uint8_t* upage, uint32_t 
 
 int count_args(const char*);
 void push_stack(void**, void*, size_t);
-void args_load(const char*, void**);
+bool args_load(const char*, void**);
 void args_split(char*, char**);
 
 int count_args(const char* file_name) {
@@ -503,10 +494,17 @@ void args_split(char* file_name, char* argv[]) {
   return;
 }
 
-void args_load(const char* file_name, void** esp) {
+bool args_load(const char* file_name, void** esp) {
   char* file_name_cpy = (char*) malloc(sizeof(char) * (strlen(file_name) + 1));
+  if (file_name_cpy == NULL) {
+    return false;
+  }
   int nArgs = count_args(file_name);
   char** args = (char**) malloc(sizeof(char*) * nArgs);
+  if (args == NULL) {
+    free(file_name_cpy);
+    return false;
+  }
   unsigned int allByteCount = sizeof(char*) * (nArgs + 1) + sizeof(char**) + sizeof(int);
   strlcpy(file_name_cpy, file_name, strlen(file_name) + 1);
   // get all arguments in file_name_cpy
@@ -515,6 +513,11 @@ void args_load(const char* file_name, void** esp) {
   // accumulate the used bytes on stack
   int argByteCount = 0;
   char** argsAddrInStack = (char**) malloc(sizeof(char*) * nArgs + 1);
+  if (argsAddrInStack == NULL) {
+    free(file_name_cpy);
+    free(args);
+    return false;
+  }
   char* arg;
   for (int argIndex = nArgs - 1; argIndex >= 0; argIndex--) {
     arg = args[argIndex];
@@ -525,9 +528,7 @@ void args_load(const char* file_name, void** esp) {
   }
   // push stack-aglin onto user stack
   argByteCount = sizeof(uint8_t) * ((0b10000 - (allByteCount & 0b1111)) & 0b1111);
-  uint8_t *arg_zeros = calloc(argByteCount / sizeof(uint8_t), sizeof(uint8_t));
-  push_stack(esp, arg_zeros, sizeof(uint8_t) * argByteCount);
-  free(arg_zeros);
+  *esp -= argByteCount;
   // push NULL ptr after stack-aglin by convention
   char* null_ptr = (char*) NULL;
   push_stack(esp, &null_ptr, sizeof(char*));
@@ -541,7 +542,7 @@ void args_load(const char* file_name, void** esp) {
   free(args);
   free(argsAddrInStack);
   free(file_name_cpy);
-  return;
+  return true;
 }
 
 /* Loads an ELF executable from FILE_NAME into the current thread.
@@ -570,7 +571,6 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
     printf("load: %s: open failed\n", file_name);
     goto done;
   }
-  // file_deny_write(file);
   
   /* Read and verify executable header. */
   if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr ||
@@ -637,9 +637,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   /* Start address. */
   *eip = (void (*)(void))ehdr.e_entry;
 
-  success = true;
-
-  args_load(file_name, esp);
+  success = args_load(file_name, esp);
   *esp -= sizeof(void*); // fake return address
 
 done:
@@ -902,7 +900,6 @@ static void start_pthread(void* exec_ UNUSED) {
   sema_up(&exec->exec_sema);
 
   if (!success) {
-    msg("hi\n");
     thread_exit();
   }
 
