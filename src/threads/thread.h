@@ -117,6 +117,9 @@ struct thread {
   unsigned magic; /* Detects stack overflow. */
 };
 
+/* for storing all sleeping threads */
+struct list sleep_theads_list;
+
 /* Types of scheduler that the user can request the kernel
  * use to schedule threads at runtime. */
 enum sched_policy {
