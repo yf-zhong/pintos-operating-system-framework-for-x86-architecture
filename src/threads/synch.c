@@ -246,19 +246,7 @@ void lock_release(struct lock* lock) {
   struct thread* t = thread_current();
   list_remove(&lock->elem);
   t->priority = find_highest_priority();
-<<<<<<< HEAD
-  struct thread *highest_thread = find_highest_thread(&lock->semaphore);
-  if (highest_thread != NULL) {
-    highest_thread->waiting_lock = NULL;
-    list_push_back(&highest_thread->holding_locks, &lock->elem);
-    lock->holder = highest_thread;
-  }
-  else {
-    lock->holder = NULL;
-  }
-=======
   lock->holder = NULL;
->>>>>>> 284031259992dfa7df305cb35d21f25172770280
   sema_up(&lock->semaphore);
   intr_set_level(old_level);
 
