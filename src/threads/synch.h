@@ -34,10 +34,9 @@ bool lock_try_acquire(struct lock*);
 void lock_release(struct lock*);
 bool lock_held_by_current_thread(const struct lock*);
 
-
 /* for project 2 task 2: strict priority scheduler */
-void update_holder_priority(struct thread *t, int pri);
-void update_lock_priority(struct lock *l, int pri);
+void update_holder_priority(struct thread* t, int pri);
+void update_lock_priority(struct lock* l, int pri);
 
 /* Condition variable. */
 struct condition {

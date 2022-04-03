@@ -150,7 +150,7 @@ void timer_print_stats(void) { printf("Timer: %" PRId64 " ticks\n", timer_ticks(
 static void timer_interrupt(struct intr_frame* args UNUSED) {
   ticks++;
   for (struct list_elem* e = list_begin(&sleep_theads_list); e != list_end(&sleep_theads_list);
-        e = list_next(e)) {
+       e = list_next(e)) {
     struct thread* t = list_entry(e, struct thread, sleep_elem);
     if (t->wakeup_time <= timer_ticks()) {
       list_remove(e);

@@ -12,7 +12,6 @@
 #define MAX_THREADS 127
 #define ERROR -1
 
-
 /* PIDs and TIDs are the same type. PID should be
    the TID of the main thread of the process */
 typedef tid_t pid_t;
@@ -63,15 +62,16 @@ struct process {
   struct list children;
   struct child* curr_as_child;
   struct file* curr_executable;
-  int cur_fd;                 /* The fd number assigned to new file */
+  int cur_fd;                        /* The fd number assigned to new file */
   struct list file_descriptor_table; /* All the files opened in current process */
 
   /* for project 2 task 3 */
-  struct list thread_list;    // save list of threads belongs to this process
-  struct list died_thread_list; // save list of tid which corresponds to a died thread
+  struct list thread_list;              // save list of threads belongs to this process
+  struct list died_thread_list;         // save list of tid which corresponds to a died thread
   struct lock lock_table[CHAR_MAX + 1]; // an array to store all the locks for this process
-  int num_locks;    
-  struct semaphore sema_table[CHAR_MAX + 1];// an array to store all the semaphores for this process
+  int num_locks;
+  struct semaphore
+      sema_table[CHAR_MAX + 1]; // an array to store all the semaphores for this process
   int num_semas;
   struct lock process_lock;
   bool is_exiting; // check everytime after switch_threads, if true, exit the current thread
@@ -80,12 +80,12 @@ struct process {
 
 /* One element in the file descriptor table */
 struct file_descriptor {
-   int fd;                   /* File descriptor */
-   struct file *file;        /* File description */
-   struct list_elem elem;
+  int fd;            /* File descriptor */
+  struct file* file; /* File description */
+  struct list_elem elem;
 };
 
-// NEW_c has to come first so that 
+// NEW_c has to come first so that
 // FILE_NAME can have the remaining space
 typedef struct start_proc_arg {
   struct child* new_c;

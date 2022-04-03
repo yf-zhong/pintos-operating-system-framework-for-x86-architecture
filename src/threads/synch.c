@@ -249,7 +249,6 @@ void lock_release(struct lock* lock) {
   lock->holder = NULL;
   sema_up(&lock->semaphore);
   intr_set_level(old_level);
-
 }
 
 /* Returns true if the current thread holds LOCK, false
@@ -387,7 +386,7 @@ void cond_signal(struct condition* cond, struct lock* lock UNUSED) {
     /* Modified for Project 2 Task 2 */
     struct semaphore_elem* highest_sema = NULL;
     int highest_priority = PRI_MIN - 1;
-    struct list_elem *e;
+    struct list_elem* e;
     for (e = list_begin(&cond->waiters); e != list_end(&cond->waiters); e = list_next(e)) {
       struct semaphore_elem* se = list_entry(e, struct semaphore_elem, elem);
       if (se->semaphore.highest_priority > highest_priority) {
@@ -417,7 +416,7 @@ void cond_broadcast(struct condition* cond, struct lock* lock) {
 }
 
 /* Recursive helper: update a thread's priority given a new priority value. */
-void update_holder_priority(struct thread *t, int pri) {
+void update_holder_priority(struct thread* t, int pri) {
   if (t->priority >= pri) {
     return;
   }
@@ -429,7 +428,7 @@ void update_holder_priority(struct thread *t, int pri) {
 }
 
 /* Recursive helper: update a lock's priority given a new priority value. */
-void update_lock_priority(struct lock *l, int pri) {
+void update_lock_priority(struct lock* l, int pri) {
   if (l->semaphore.highest_priority >= pri) {
     return;
   }

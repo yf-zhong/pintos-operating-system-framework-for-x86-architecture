@@ -249,16 +249,13 @@ static void thread_enqueue(struct thread* t) {
     if (t->priority > thread_current()->priority) {
       if (intr_context()) {
         intr_yield_on_return();
-      }
-      else {
+      } else {
         thread_yield();
       }
     }
-  }
-  else {
+  } else {
     PANIC("Unimplemented scheduling policy value: %d", active_sched_policy);
   }
-    
 }
 
 /* Transitions a blocked thread T to the ready-to-run state.
@@ -278,7 +275,7 @@ void thread_unblock(struct thread* t) {
   ASSERT(t->status == THREAD_BLOCKED);
   t->status = THREAD_READY;
   thread_enqueue(t);
-  
+
   intr_set_level(old_level);
 }
 
@@ -349,14 +346,12 @@ void thread_foreach(thread_action_func* func, void* aux) {
   }
 }
 
-int max(int a, int b) {
-  return a > b ? a : b;
-}
+int max(int a, int b) { return a > b ? a : b; }
 
-int find_highest_priority(void){
+int find_highest_priority(void) {
   int highest_lock_priority = PRI_MIN;
   // get highest lock priority
-  struct thread *t = thread_current();
+  struct thread* t = thread_current();
   for (struct list_elem* e = list_begin(&t->holding_locks); e != list_end(&t->holding_locks);
        e = list_next(e)) {
     struct lock* l = list_entry(e, struct lock, elem);
@@ -365,11 +360,10 @@ int find_highest_priority(void){
   return max(t->base_priority, highest_lock_priority);
 }
 
-
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void thread_set_priority(int new_priority) {
   struct thread* t = thread_current();
-  t->base_priority = new_priority; 
+  t->base_priority = new_priority;
   t->priority = find_highest_priority();
   thread_yield();
 }
@@ -512,7 +506,7 @@ static struct thread* thread_schedule_fifo(void) {
 /* Strict priority scheduler */
 static struct thread* thread_schedule_prio(void) {
   struct thread* result = idle_thread;
-  
+
   struct list_elem* e;
   for (e = list_begin(&fifo_ready_list); e != list_end(&fifo_ready_list); e = list_next(e)) {
     struct thread* cur = list_entry(e, struct thread, elem);

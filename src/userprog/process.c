@@ -19,7 +19,7 @@
 #include "threads/synch.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
- 
+
 static thread_func start_process NO_RETURN;
 static thread_func start_pthread NO_RETURN;
 static bool load(const char* file_name, void (**eip)(void), void** esp);
@@ -32,7 +32,7 @@ void pcb_exit_setup(struct process*);
 bool setup_thread(void (**eip)(void), void** esp, struct sfun_args* sa);
 
 /* helpers */
-static bool setup_thread_stack(void ** esp);
+static bool setup_thread_stack(void** esp);
 void drop_all_holding_locks(void);
 void free_upage(void);
 void wakeup_waiting_thread(void);
@@ -68,7 +68,7 @@ CHILD* new_child() {
   }
   sema_init(&cptr->exec_sema, 0);
   sema_init(&cptr->wait_sema, 0);
-  cptr-> exit_status = ERROR;
+  cptr->exit_status = ERROR;
   cptr->is_exited = false;
   cptr->is_waiting = false;
   cptr->ref_cnt = 2;
@@ -86,7 +86,7 @@ pid_t process_execute(const char* file_name) {
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
-  spaptr = (SPA*) palloc_get_page(0);
+  spaptr = (SPA*)palloc_get_page(0);
   if (spaptr == NULL)
     return TID_ERROR;
   spaptr->file_name = palloc_get_page(0);
@@ -108,7 +108,7 @@ pid_t process_execute(const char* file_name) {
     prog_name[i] = file_name[i];
   }
   prog_name[i] = '\0';
-  
+
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create(prog_name, PRI_DEFAULT, start_process, spaptr);
   // if can't create new thread, set children as exited, no need to sema_down
@@ -116,8 +116,7 @@ pid_t process_execute(const char* file_name) {
     spaptr->new_c->exit_status = ERROR;
     spaptr->new_c->is_exited = true;
     decrement_ref_cnt(spaptr->new_c);
-  }
-  else {
+  } else {
     sema_down(&spaptr->new_c->exec_sema);
   }
   struct process* pcb = thread_current()->pcb;
@@ -130,7 +129,7 @@ pid_t process_execute(const char* file_name) {
   return tid;
 }
 
-void pcb_init(struct thread* t, struct process *new_pcb, CHILD *new_c) {
+void pcb_init(struct thread* t, struct process* new_pcb, CHILD* new_c) {
   new_pcb->pagedir = NULL;
   t->pcb = new_pcb;
   t->pcb->main_thread = t;
@@ -158,7 +157,7 @@ void pcb_init(struct thread* t, struct process *new_pcb, CHILD *new_c) {
 /* A thread function that loads a user process and starts it
    running. */
 static void start_process(void* spaptr_) {
-  SPA* spaptr = (SPA*) spaptr_;
+  SPA* spaptr = (SPA*)spaptr_;
   char* file_name = spaptr->file_name;
   CHILD* new_c = spaptr->new_c;
   struct thread* t = thread_current();
@@ -175,7 +174,7 @@ static void start_process(void* spaptr_) {
     // does not try to activate our uninitialized pagedir
     pcb_init(t, new_pcb, new_c);
   }
- 
+
   /* Initialize interrupt frame and load executable. */
   if (success) {
     memset(&if_, 0, sizeof if_);
@@ -194,8 +193,8 @@ static void start_process(void* spaptr_) {
 
     success = load(file_name, &if_.eip, &if_.esp);
   }
-  
-  if(success) {
+
+  if (success) {
     struct file* file = filesys_open(t->pcb->process_name);
     t->pcb->curr_executable = file;
     file_deny_write(file);
@@ -233,10 +232,9 @@ static void start_process(void* spaptr_) {
 }
 
 CHILD* find_child(pid_t pid) {
-  struct list *children = &thread_current()->pcb->children;
+  struct list* children = &thread_current()->pcb->children;
   CHILD* cptr;
-  for (struct list_elem *e = list_begin(children); e != list_end(children);
-      e = list_next(e)) {
+  for (struct list_elem* e = list_begin(children); e != list_end(children); e = list_next(e)) {
     cptr = list_entry(e, CHILD, elem);
     if (cptr->pid == pid) {
       return cptr;
@@ -274,16 +272,15 @@ void decrement_ref_cnt(CHILD* cptr) {
     lock_release(&cptr->ref_lock);
     free(cptr);
     return;
-  }
-  else {
+  } else {
     lock_release(&cptr->ref_lock);
     return;
   }
 }
 
 void decrement_children_ref_cnt(struct process* pcb) {
-  struct list_elem *e = list_begin(&pcb->children);
-  struct list_elem *next_e;
+  struct list_elem* e = list_begin(&pcb->children);
+  struct list_elem* next_e;
   CHILD* cptr;
   while (e != list_end(&pcb->children)) {
     next_e = list_next(e);
@@ -294,7 +291,7 @@ void decrement_children_ref_cnt(struct process* pcb) {
 }
 
 void remove_died_thread_list(struct process* pcb) {
-  struct list_elem *e = list_begin(&pcb->died_thread_list);
+  struct list_elem* e = list_begin(&pcb->died_thread_list);
   while (!list_empty(&pcb->died_thread_list)) {
     e = list_pop_front(&pcb->died_thread_list);
     free(list_entry(e, struct died_thread, elem));
@@ -312,8 +309,9 @@ void pcb_exit_setup(struct process* pcb_to_free) {
 
 struct file_descriptor* find_file_des(int fd) {
   struct process* pcb = thread_current()->pcb;
-  struct list_elem *e;
-  for (e = list_begin(&(pcb->file_descriptor_table)); e != list_end(&(pcb->file_descriptor_table)); e = list_next(e)) {
+  struct list_elem* e;
+  for (e = list_begin(&(pcb->file_descriptor_table)); e != list_end(&(pcb->file_descriptor_table));
+       e = list_next(e)) {
     struct file_descriptor* descriptor = list_entry(e, struct file_descriptor, elem);
     if (descriptor->fd == fd) {
       return descriptor;
@@ -379,7 +377,7 @@ void process_exit(void) {
   struct process* pcb_to_free = cur->pcb;
 
   /* Close all the file descriptors */
-  struct list_elem *cur_file = list_begin(&pcb_to_free->file_descriptor_table);
+  struct list_elem* cur_file = list_begin(&pcb_to_free->file_descriptor_table);
   while (cur_file != list_end(&pcb_to_free->file_descriptor_table)) {
     struct file_descriptor* descriptor = list_entry(cur_file, struct file_descriptor, elem);
     cur_file = list_next(cur_file);
@@ -501,20 +499,20 @@ void push_stack(void** esp, void* src, size_t size) {
 void args_split(char* file_name, char* argv[]) {
   char** saveptr = &file_name;
   char* arg = strtok_r(file_name, " ", saveptr);
-  for(int i = 0; arg != (char*) NULL; i++) {
+  for (int i = 0; arg != (char*)NULL; i++) {
     argv[i] = arg;
-    arg = strtok_r((char*) NULL, " ", saveptr);
+    arg = strtok_r((char*)NULL, " ", saveptr);
   }
   return;
 }
 
 bool args_load(const char* file_name, void** esp) {
-  char* file_name_cpy = (char*) malloc(sizeof(char) * (strlen(file_name) + 1));
+  char* file_name_cpy = (char*)malloc(sizeof(char) * (strlen(file_name) + 1));
   if (file_name_cpy == NULL) {
     return false;
   }
   int nArgs = count_args(file_name);
-  char** args = (char**) malloc(sizeof(char*) * nArgs);
+  char** args = (char**)malloc(sizeof(char*) * nArgs);
   if (args == NULL) {
     free(file_name_cpy);
     return false;
@@ -526,7 +524,7 @@ bool args_load(const char* file_name, void** esp) {
   // push all arguments onto user stack, record the location of each arg on the stack
   // accumulate the used bytes on stack
   int argByteCount = 0;
-  char** argsAddrInStack = (char**) malloc(sizeof(char*) * nArgs + 1);
+  char** argsAddrInStack = (char**)malloc(sizeof(char*) * nArgs + 1);
   if (argsAddrInStack == NULL) {
     free(file_name_cpy);
     free(args);
@@ -538,13 +536,13 @@ bool args_load(const char* file_name, void** esp) {
     argByteCount = sizeof(char) * (strlen(arg) + 1);
     allByteCount += argByteCount;
     push_stack(esp, arg, argByteCount);
-    argsAddrInStack[argIndex] = (char*) *esp;
+    argsAddrInStack[argIndex] = (char*)*esp;
   }
   // push stack-aglin onto user stack
   argByteCount = sizeof(uint8_t) * ((0b10000 - (allByteCount & 0b1111)) & 0b1111);
   *esp -= argByteCount;
   // push NULL ptr after stack-aglin by convention
-  char* null_ptr = (char*) NULL;
+  char* null_ptr = (char*)NULL;
   push_stack(esp, &null_ptr, sizeof(char*));
   // push all pointers to argument onto the user stack
   push_stack(esp, argsAddrInStack, sizeof(char*) * nArgs);
@@ -577,7 +575,6 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
     goto done;
   process_activate();
 
-
   /* Open executable file. */
   file = filesys_open(t->pcb->process_name);
 
@@ -585,7 +582,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
     printf("load: %s: open failed\n", file_name);
     goto done;
   }
-  
+
   /* Read and verify executable header. */
   if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr ||
       memcmp(ehdr.e_ident, "\177ELF\1\1\1", 7) || ehdr.e_type != 2 || ehdr.e_machine != 3 ||
@@ -803,7 +800,7 @@ bool is_main_thread(struct thread* t, struct process* p) { return p->main_thread
 pid_t get_pid(struct process* p) { return (pid_t)p->main_thread->tid; }
 
 /* Helper */
-static bool setup_thread_stack(void ** esp) {
+static bool setup_thread_stack(void** esp) {
   uint8_t* kpage = palloc_get_page(PAL_USER | PAL_ZERO);
   if (kpage != NULL) {
     bool success = false;
@@ -831,13 +828,13 @@ static bool setup_thread_stack(void ** esp) {
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. You may find it necessary to change the
    function signature. */
-bool setup_thread(void (**eip)(void), void** esp, struct sfun_args *sa) {
+bool setup_thread(void (**eip)(void), void** esp, struct sfun_args* sa) {
   // Activate page directory
   process_activate();
 
   if (setup_thread_stack(esp)) {
     //push pthread_fun and void* arg
-    unsigned int allByteCount = sizeof(pthread_fun) + sizeof(void *);
+    unsigned int allByteCount = sizeof(pthread_fun) + sizeof(void*);
     unsigned int argByteCount = sizeof(uint8_t) * ((0b10000 - (allByteCount & 0b1111)) & 0b1111);
     uint8_t* arg_zeros = calloc(argByteCount / sizeof(uint8_t), sizeof(uint8_t));
     if (arg_zeros == NULL) {
@@ -849,7 +846,7 @@ bool setup_thread(void (**eip)(void), void** esp, struct sfun_args *sa) {
     push_stack(esp, &sa->arg, sizeof(void*));
     push_stack(esp, &sa->tfun, sizeof(pthread_fun));
     //set eip to stub_fun
-    *eip = (void (*)(void)) sa->sfun;
+    *eip = (void (*)(void))sa->sfun;
     return true;
   }
   return false;
@@ -896,8 +893,8 @@ static void start_pthread(void* exec_ UNUSED) {
   struct sfun_args* exec = (struct sfun_args*)exec_;
   struct intr_frame if_;
   bool success = false;
-  
-  struct thread *t = thread_current();
+
+  struct thread* t = thread_current();
   t->pcb = exec->pcb;
 
   memset(&if_, 0, sizeof if_);
@@ -930,7 +927,6 @@ static void start_pthread(void* exec_ UNUSED) {
   NOT_REACHED();
 }
 
-
 /* Waits for thread with TID to die, if that thread was spawned
    in the same process and has not been waited on yet. Returns TID on
    success and returns TID_ERROR on failure immediately, without
@@ -944,8 +940,9 @@ tid_t pthread_join(tid_t tid UNUSED) {
   if (cur->tid == tid) {
     return TID_ERROR;
   }
-  for (struct list_elem* e = list_begin(&cur_pcb->died_thread_list); e != list_end(&cur_pcb->died_thread_list); e = list_next(e)) {
-    struct died_thread *dt_ptr = list_entry(e, struct died_thread, elem);
+  for (struct list_elem* e = list_begin(&cur_pcb->died_thread_list);
+       e != list_end(&cur_pcb->died_thread_list); e = list_next(e)) {
+    struct died_thread* dt_ptr = list_entry(e, struct died_thread, elem);
     if (dt_ptr->tid == tid) {
       return dt_ptr->is_joined ? TID_ERROR : tid;
     }
@@ -957,10 +954,10 @@ tid_t pthread_join(tid_t tid UNUSED) {
       return tid;
     }
     waiting_thread = cur_pcb->main_thread;
-  }
-  else {
-    for (struct list_elem* e = list_begin(&cur_pcb->thread_list); e != list_end(&cur_pcb->thread_list); e = list_next(e)) {
-      struct thread *t = list_entry(e, struct thread, proc_elem);
+  } else {
+    for (struct list_elem* e = list_begin(&cur_pcb->thread_list);
+         e != list_end(&cur_pcb->thread_list); e = list_next(e)) {
+      struct thread* t = list_entry(e, struct thread, proc_elem);
       if (t->tid == tid) {
         waiting_thread = t;
         break;
@@ -981,8 +978,9 @@ tid_t pthread_join(tid_t tid UNUSED) {
 /* Free all current thread's holding locks */
 void drop_all_holding_locks() {
   struct thread* cur = thread_current();
-  for (struct list_elem *e = list_begin(&cur->holding_locks); e != list_end(&cur->holding_locks); e = list_next(e)) {
-    struct lock *l = list_entry(e, struct lock, elem);
+  for (struct list_elem* e = list_begin(&cur->holding_locks); e != list_end(&cur->holding_locks);
+       e = list_next(e)) {
+    struct lock* l = list_entry(e, struct lock, elem);
     lock_release(l);
   }
 }
@@ -1006,7 +1004,7 @@ void wakeup_waiting_thread() {
 void remove_cur_from_thread_list() {
   struct thread* cur = thread_current();
   struct process* cur_pcb = cur->pcb;
-  struct died_thread* dt_ptr = (struct died_thread*) malloc(sizeof(struct died_thread));
+  struct died_thread* dt_ptr = (struct died_thread*)malloc(sizeof(struct died_thread));
   dt_ptr->tid = cur->tid;
   dt_ptr->is_joined = cur->join_sema_ptr != NULL;
   lock_acquire(&cur_pcb->process_lock);
@@ -1081,7 +1079,7 @@ void pthread_exit_main(void) {
     cur_pcb->curr_as_child->exit_status = 0;
   }
   // all non-main threads are exited, exit the process
-  // the exit status is set by thread that calls syscall exit 
+  // the exit status is set by thread that calls syscall exit
   // the exit status is -1 if no thread call syscall exit
   process_exit();
 }

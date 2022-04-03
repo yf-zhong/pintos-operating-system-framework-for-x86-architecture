@@ -55,11 +55,10 @@ void sys_sema_down(struct intr_frame*, sema_t*);
 void sys_sema_up(struct intr_frame*, sema_t*);
 void sys_get_tid(struct intr_frame* f);
 
-
 bool is_valid_addr(uint32_t addr) {
   uint32_t* pd = thread_current()->pcb->pagedir;
   for (int i = 0; i < 4; i++) {
-    if (!(is_user_vaddr((const char *) addr + i) && pagedir_get_page(pd, (const char *) addr + i))) {
+    if (!(is_user_vaddr((const char*)addr + i) && pagedir_get_page(pd, (const char*)addr + i))) {
       return false;
     }
   }
@@ -87,15 +86,12 @@ void sys_practice(struct intr_frame* f, int i) {
   return;
 }
 
-void sys_halt() {
-  shutdown_power_off();
-}
+void sys_halt() { shutdown_power_off(); }
 
 void sys_exec(struct intr_frame* f, const char* cmd_line) {
   if (is_valid_str(cmd_line)) {
     f->eax = process_execute(cmd_line);
-  }
-  else {
+  } else {
     sys_exit(f, -1);
   }
   return;
@@ -107,17 +103,17 @@ void sys_wait(struct intr_frame* f, pid_t pid) {
 }
 
 void sys_exit(struct intr_frame* f, int status) {
-    f->eax = status;
-    struct process* pcb = thread_current()->pcb;
-    lock_acquire(&pcb->process_lock);
-    if (!pcb->is_exiting || status == -1 || pcb->curr_as_child->exit_status == 0) {
-      pcb->curr_as_child->exit_status = status;
-    }
-    lock_release(&pcb->process_lock);
-    process_exit();
+  f->eax = status;
+  struct process* pcb = thread_current()->pcb;
+  lock_acquire(&pcb->process_lock);
+  if (!pcb->is_exiting || status == -1 || pcb->curr_as_child->exit_status == 0) {
+    pcb->curr_as_child->exit_status = status;
+  }
+  lock_release(&pcb->process_lock);
+  process_exit();
 }
 
-void sys_create(struct intr_frame* f, const char* file, unsigned initial_size) {  
+void sys_create(struct intr_frame* f, const char* file, unsigned initial_size) {
   if (!is_valid_str(file)) {
     sys_exit(f, -1);
   }
@@ -150,19 +146,20 @@ void sys_open(struct intr_frame* f, const char* file) {
   }
   struct process* pcb = thread_current()->pcb;
   lock_acquire(&file_sys_lock);
-  struct file *new_file = filesys_open(file);
+  struct file* new_file = filesys_open(file);
   lock_release(&file_sys_lock);
   if (!new_file) {
     f->eax = -1;
     return;
   }
-  struct file_descriptor *new_file_descriptor = (struct file_descriptor *) malloc(sizeof(struct file_descriptor));
+  struct file_descriptor* new_file_descriptor =
+      (struct file_descriptor*)malloc(sizeof(struct file_descriptor));
   if (!new_file_descriptor) {
     sys_exit(f, -1);
   }
   new_file_descriptor->fd = pcb->cur_fd++;
   new_file_descriptor->file = new_file;
-  list_push_back(&(pcb->file_descriptor_table) ,&(new_file_descriptor->elem));
+  list_push_back(&(pcb->file_descriptor_table), &(new_file_descriptor->elem));
   f->eax = new_file_descriptor->fd;
   return;
 }
@@ -173,7 +170,7 @@ void sys_filesize(struct intr_frame* f, int fd) {
   }
   off_t file_size;
   lock_acquire(&file_sys_lock);
-  struct file_descriptor *my_file_des = find_file_des(fd);
+  struct file_descriptor* my_file_des = find_file_des(fd);
   if (!my_file_des) {
     lock_release(&file_sys_lock);
     sys_exit(f, -1);
@@ -201,7 +198,7 @@ void sys_read(struct intr_frame* f, int fd, void* buffer, unsigned size) {
     sys_exit(f, -1);
   }
   lock_acquire(&file_sys_lock);
-  struct file_descriptor *my_file_des = find_file_des(fd);
+  struct file_descriptor* my_file_des = find_file_des(fd);
   if (!my_file_des) {
     lock_release(&file_sys_lock);
     sys_exit(f, -1);
@@ -305,7 +302,7 @@ void sys_comp_e(struct intr_frame* f, int num) {
   return;
 }
 
-void sys_pthread_create(struct intr_frame* f, stub_fun sf, pthread_fun pf, void *arg) {
+void sys_pthread_create(struct intr_frame* f, stub_fun sf, pthread_fun pf, void* arg) {
   f->eax = pthread_execute(sf, pf, arg);
   return;
 }
@@ -314,8 +311,7 @@ void sys_pthread_exit(struct intr_frame* f UNUSED) {
   struct thread* t = thread_current();
   if (is_main_thread(t, t->pcb)) {
     pthread_exit_main();
-  }
-  else {
+  } else {
     pthread_exit();
   }
   return;
@@ -331,10 +327,9 @@ void sys_lock_init(struct intr_frame* f, lock_t* lock) {
   lock_acquire(&pcb->process_lock);
   if (pcb->num_locks < 0 || pcb->num_locks > CHAR_MAX || lock == NULL) {
     f->eax = false;
-  }
-  else {
+  } else {
     *lock = pcb->num_locks;
-    lock_init(&pcb->lock_table[(int) *lock]);
+    lock_init(&pcb->lock_table[(int)*lock]);
     pcb->num_locks++;
     f->eax = true;
   }
@@ -346,13 +341,13 @@ void sys_lock_acquire(struct intr_frame* f, lock_t* lock) {
   struct thread* t = thread_current();
   struct process* pcb = t->pcb;
   lock_acquire(&pcb->process_lock);
-  if (lock == NULL || *lock < 0 || *lock >= pcb->num_locks || pcb->lock_table[(int)*lock].holder == t) {
+  if (lock == NULL || *lock < 0 || *lock >= pcb->num_locks ||
+      pcb->lock_table[(int)*lock].holder == t) {
     lock_release(&pcb->process_lock);
     f->eax = false;
-  }
-  else {
+  } else {
     lock_release(&pcb->process_lock);
-    lock_acquire(&pcb->lock_table[(int) *lock]);
+    lock_acquire(&pcb->lock_table[(int)*lock]);
     f->eax = true;
   }
   return;
@@ -362,11 +357,11 @@ void sys_lock_release(struct intr_frame* f, lock_t* lock) {
   struct thread* t = thread_current();
   struct process* pcb = t->pcb;
   lock_acquire(&pcb->process_lock);
-  if (lock == NULL || *lock < 0 || *lock >= pcb->num_locks || pcb->lock_table[(int) *lock].holder != t) {
+  if (lock == NULL || *lock < 0 || *lock >= pcb->num_locks ||
+      pcb->lock_table[(int)*lock].holder != t) {
     f->eax = false;
-  }
-  else {
-    lock_release(&pcb->lock_table[(int) *lock]);
+  } else {
+    lock_release(&pcb->lock_table[(int)*lock]);
     f->eax = true;
   }
   lock_release(&pcb->process_lock);
@@ -380,7 +375,7 @@ void sys_sema_init(struct intr_frame* f, sema_t* sema, int val) {
     f->eax = false;
   } else {
     *sema = pcb->num_semas;
-    sema_init(&pcb->sema_table[(int) *sema], val);
+    sema_init(&pcb->sema_table[(int)*sema], val);
     pcb->num_semas++;
     f->eax = true;
   }
@@ -390,10 +385,10 @@ void sys_sema_init(struct intr_frame* f, sema_t* sema, int val) {
 
 void sys_sema_down(struct intr_frame* f, sema_t* sema) {
   struct process* pcb = thread_current()->pcb;
-  if (sema == NULL || (int) *sema < 0 || *sema >= pcb->num_semas) {
+  if (sema == NULL || (int)*sema < 0 || *sema >= pcb->num_semas) {
     f->eax = false;
   } else {
-    sema_down(&pcb->sema_table[(int) *sema]);
+    sema_down(&pcb->sema_table[(int)*sema]);
     f->eax = true;
   }
   return;
@@ -401,7 +396,7 @@ void sys_sema_down(struct intr_frame* f, sema_t* sema) {
 
 void sys_sema_up(struct intr_frame* f, sema_t* sema) {
   struct process* pcb = thread_current()->pcb;
-  if (sema == NULL || (int) *sema < 0 || *sema >= pcb->num_semas) {
+  if (sema == NULL || (int)*sema < 0 || *sema >= pcb->num_semas) {
     f->eax = false;
   } else {
     sema_up(&pcb->sema_table[(int)*sema]);
@@ -425,13 +420,13 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
    * include it in your final submission.
    */
 
-   /* Validate stack pointer */
+  /* Validate stack pointer */
   if (!is_valid_addr((uint32_t)args)) {
     sys_exit(f, -1);
   }
 
   int num_args = 0;
-  switch(args[0]) {
+  switch (args[0]) {
     case SYS_WRITE:
     case SYS_READ:
       num_args = 3;
@@ -466,7 +461,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     sys_exit(f, -1);
   }
 
-  switch(args[0]) {
+  switch (args[0]) {
     case SYS_PRACTICE:
       sys_practice(f, args[1]);
       break;
@@ -477,10 +472,10 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       sys_wait(f, args[1]);
       break;
     case SYS_EXEC:
-      if (((sizeof(pid_t) - 1) & (unsigned long) &args[1]) || !is_valid_addr((uint32_t) &args[1])) {
+      if (((sizeof(pid_t) - 1) & (unsigned long)&args[1]) || !is_valid_addr((uint32_t)&args[1])) {
         sys_exit(f, -1);
       }
-      sys_exec(f, (char*) args[1]);
+      sys_exec(f, (char*)args[1]);
       break;
     case SYS_EXIT:
       sys_exit(f, args[1]);
@@ -488,37 +483,37 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
     /* File operations */
     case SYS_CREATE:
-      if ((sizeof(char*) - 1) & (unsigned long) &args[1]) {
+      if ((sizeof(char*) - 1) & (unsigned long)&args[1]) {
         sys_exit(f, -1);
       }
-      sys_create(f, (const char*) args[1], args[2]);
+      sys_create(f, (const char*)args[1], args[2]);
       break;
     case SYS_REMOVE:
-      if ((sizeof(char*) - 1) & (unsigned long) &args[1]) {
+      if ((sizeof(char*) - 1) & (unsigned long)&args[1]) {
         sys_exit(f, -1);
       }
-      sys_remove(f, (const char*) args[1]);
+      sys_remove(f, (const char*)args[1]);
       break;
     case SYS_OPEN:
-      if ((sizeof(char*) - 1) & (unsigned long) &args[1]) {
+      if ((sizeof(char*) - 1) & (unsigned long)&args[1]) {
         sys_exit(f, -1);
       }
-      sys_open(f, (const char*) args[1]);
+      sys_open(f, (const char*)args[1]);
       break;
     case SYS_FILESIZE:
       sys_filesize(f, args[1]);
       break;
     case SYS_READ:
-      if ((sizeof(void*) - 1) & (unsigned long) &args[2]) {
+      if ((sizeof(void*) - 1) & (unsigned long)&args[2]) {
         sys_exit(f, -1);
       }
-      sys_read(f, args[1], (void*) args[2], args[3]);
+      sys_read(f, args[1], (void*)args[2], args[3]);
       break;
     case SYS_WRITE:
-      if ((sizeof(void*) - 1) & (unsigned long) &args[2]) {
+      if ((sizeof(void*) - 1) & (unsigned long)&args[2]) {
         sys_exit(f, -1);
       }
-      sys_write(f, args[1], (const void*) args[2], args[3]);
+      sys_write(f, args[1], (const void*)args[2], args[3]);
       break;
     case SYS_SEEK:
       sys_seek(f, args[1], args[2]);
@@ -536,46 +531,46 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       break;
 
     /* For project 2 task 3 */
-    case SYS_PT_CREATE:    /* Creates a new thread */
-      sys_pthread_create(f, (stub_fun)args[1], (pthread_fun)args[2], (void *)args[3]);
+    case SYS_PT_CREATE: /* Creates a new thread */
+      sys_pthread_create(f, (stub_fun)args[1], (pthread_fun)args[2], (void*)args[3]);
       break;
-    case SYS_PT_EXIT:       /* Exits the current thread */
+    case SYS_PT_EXIT: /* Exits the current thread */
       sys_pthread_exit(f);
       break;
-    case SYS_PT_JOIN:       /* Waits for thread to finish */
+    case SYS_PT_JOIN: /* Waits for thread to finish */
       sys_pthread_join(f, args[1]);
       break;
-    case SYS_LOCK_INIT:     /* Initializes a lock */
-      if (!is_valid_addr((uint32_t) &args[1])) {
+    case SYS_LOCK_INIT: /* Initializes a lock */
+      if (!is_valid_addr((uint32_t)&args[1])) {
         sys_exit(f, -1);
       }
-      sys_lock_init(f, (lock_t *)args[1]);
+      sys_lock_init(f, (lock_t*)args[1]);
       break;
-    case SYS_LOCK_ACQUIRE:  /* Acquires a lock */
-      if (!is_valid_addr((uint32_t) &args[1])) {
+    case SYS_LOCK_ACQUIRE: /* Acquires a lock */
+      if (!is_valid_addr((uint32_t)&args[1])) {
         sys_exit(f, -1);
       }
-      sys_lock_acquire(f, (lock_t *)args[1]);
+      sys_lock_acquire(f, (lock_t*)args[1]);
       break;
-    case SYS_LOCK_RELEASE:  /* Releases a lock */
-      if (!is_valid_addr((uint32_t) &args[1])) {
+    case SYS_LOCK_RELEASE: /* Releases a lock */
+      if (!is_valid_addr((uint32_t)&args[1])) {
         sys_exit(f, -1);
       }
-      sys_lock_release(f, (lock_t *)args[1]);
+      sys_lock_release(f, (lock_t*)args[1]);
       break;
-    case SYS_SEMA_INIT:     /* Initializes a semaphore */
-      sys_sema_init(f, (sema_t *)args[1], args[2]);
+    case SYS_SEMA_INIT: /* Initializes a semaphore */
+      sys_sema_init(f, (sema_t*)args[1], args[2]);
       break;
-    case SYS_SEMA_DOWN:     /* Downs a semaphore */
-      sys_sema_down(f, (sema_t *)args[1]);
+    case SYS_SEMA_DOWN: /* Downs a semaphore */
+      sys_sema_down(f, (sema_t*)args[1]);
       break;
-    case SYS_SEMA_UP:       /* Ups a semaphore */
-      sys_sema_up(f, (sema_t *)args[1]);
+    case SYS_SEMA_UP: /* Ups a semaphore */
+      sys_sema_up(f, (sema_t*)args[1]);
       break;
-    case SYS_GET_TID:       /* Gets TID of the current thread */
+    case SYS_GET_TID: /* Gets TID of the current thread */
       sys_get_tid(f);
       break;
-    
+
     default:
       f->eax = -1; /* If the NUMBER is not defined */
   }

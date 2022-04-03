@@ -100,7 +100,7 @@ struct thread {
   int priority;
   int base_priority;
   struct list holding_locks;
-  struct lock *waiting_lock;
+  struct lock* waiting_lock;
 
   /* For project 2 task 3: user thread */
   struct semaphore join_sema;      /* Default 0 when thread created */
