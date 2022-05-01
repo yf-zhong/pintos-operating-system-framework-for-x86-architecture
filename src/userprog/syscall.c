@@ -13,6 +13,7 @@
 #include "userprog/pagedir.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
+#include "filesys/inode.h"
 #include "lib/float.h"
 
 static void syscall_handler(struct intr_frame*);
@@ -271,6 +272,18 @@ void sys_comp_e(struct intr_frame* f, int num) {
   return;
 }
 
+void sys_inumber(struct intr_frame* f, int fd) {
+  if (fd < 0) {
+    printf("fd: %d is invalid.", fd);
+    f->eax = -1;
+    return;
+  }
+  struct file_descriptor* cur_file_des = find_file_des(fd);
+  struct inode* inode = cur_file_des->file->inode;
+  f->eax = inode_get_inumber(inode);
+  return;
+}
+
 static void syscall_handler(struct intr_frame* f UNUSED) {
   uint32_t* args = ((uint32_t*)f->esp);
 
@@ -306,6 +319,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     case SYS_FILESIZE:
     case SYS_TELL:
     case SYS_CLOSE:
+    case SYS_INUMBER:
       num_args = 1;
       break;
     default:
@@ -384,7 +398,12 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     case SYS_COMPUTE_E:
       sys_comp_e(f, args[1]);
       break;
-    
+
+    /* File system inode */
+    case SYS_INUMBER:
+      sys_inumber(f, arg[1]);
+      break;
+  
     default:
       f->eax = -1; /* If the NUMBER is not defined */
   }
