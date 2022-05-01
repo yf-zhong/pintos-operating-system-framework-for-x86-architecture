@@ -253,6 +253,7 @@ void decrement_ref_cnt(CHILD* cptr) {
   lock_acquire(&cptr->ref_lock);
   cptr->ref_cnt--;
   if (cptr->ref_cnt == 0) {
+    lock_release(&cptr->ref_lock);
     palloc_free_page(cptr);
     return;
   }
