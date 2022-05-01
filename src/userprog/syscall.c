@@ -15,10 +15,6 @@
 #include "filesys/filesys.h"
 #include "lib/float.h"
 
-/* Synchronization Types */
-typedef char lock_t;
-typedef char sema_t;
-
 static void syscall_handler(struct intr_frame*);
 
 bool is_valid_addr(uint32_t);
@@ -28,33 +24,6 @@ void sys_halt(void);
 void sys_exec(struct intr_frame*, const char*);
 void sys_wait(struct intr_frame*, pid_t);
 void sys_exit(struct intr_frame*, int);
-
-/* File operation syscalls */
-void sys_create(struct intr_frame*, const char*, unsigned);
-void sys_remove(struct intr_frame*, const char*);
-void sys_open(struct intr_frame*, const char*);
-void sys_filesize(struct intr_frame*, int);
-void sys_read(struct intr_frame*, int, void*, unsigned);
-void sys_write(struct intr_frame*, int, const void*, unsigned);
-void sys_seek(struct intr_frame*, int, unsigned);
-void sys_tell(struct intr_frame*, int);
-void sys_close(struct intr_frame*, int);
-
-/* FPU ops */
-void sys_comp_e(struct intr_frame*, int);
-
-/* For part 2 task 3: user thread */
-void sys_pthread_create(struct intr_frame*, stub_fun, pthread_fun, void*);
-void sys_pthread_exit(struct intr_frame*);
-void sys_pthread_join(struct intr_frame*, tid_t tid);
-void sys_lock_init(struct intr_frame*, lock_t*);
-void sys_lock_acquire(struct intr_frame*, lock_t*);
-void sys_lock_release(struct intr_frame*, lock_t*);
-void sys_sema_init(struct intr_frame*, sema_t*, int);
-void sys_sema_down(struct intr_frame*, sema_t*);
-void sys_sema_up(struct intr_frame*, sema_t*);
-void sys_get_tid(struct intr_frame* f);
-
 
 bool is_valid_addr(uint32_t addr) {
   uint32_t* pd = thread_current()->pcb->pagedir;
@@ -109,11 +78,7 @@ void sys_wait(struct intr_frame* f, pid_t pid) {
 void sys_exit(struct intr_frame* f, int status) {
     f->eax = status;
     struct process* pcb = thread_current()->pcb;
-    lock_acquire(&pcb->process_lock);
-    if (!pcb->is_exiting || status == -1 || pcb->curr_as_child->exit_status == 0) {
-      pcb->curr_as_child->exit_status = status;
-    }
-    lock_release(&pcb->process_lock);
+    pcb->curr_as_child->exit_status = status;
     process_exit();
 }
 
@@ -154,6 +119,7 @@ void sys_open(struct intr_frame* f, const char* file) {
   lock_release(&file_sys_lock);
   if (!new_file) {
     f->eax = -1;
+    lock_release(&file_sys_lock);
     return;
   }
   struct file_descriptor *new_file_descriptor = (struct file_descriptor *) malloc(sizeof(struct file_descriptor));
@@ -305,116 +271,6 @@ void sys_comp_e(struct intr_frame* f, int num) {
   return;
 }
 
-void sys_pthread_create(struct intr_frame* f, stub_fun sf, pthread_fun pf, void *arg) {
-  f->eax = pthread_execute(sf, pf, arg);
-  return;
-}
-
-void sys_pthread_exit(struct intr_frame* f UNUSED) {
-  struct thread* t = thread_current();
-  if (is_main_thread(t, t->pcb)) {
-    pthread_exit_main();
-  }
-  else {
-    pthread_exit();
-  }
-  return;
-}
-
-void sys_pthread_join(struct intr_frame* f, tid_t tid) {
-  /* Any validation? */
-  f->eax = pthread_join(tid);
-}
-
-void sys_lock_init(struct intr_frame* f, lock_t* lock) {
-  struct process* pcb = thread_current()->pcb;
-  lock_acquire(&pcb->process_lock);
-  if (pcb->num_locks < 0 || pcb->num_locks > CHAR_MAX || lock == NULL) {
-    f->eax = false;
-  }
-  else {
-    *lock = pcb->num_locks;
-    lock_init(&pcb->lock_table[(int) *lock]);
-    pcb->num_locks++;
-    f->eax = true;
-  }
-  lock_release(&pcb->process_lock);
-  return;
-}
-
-void sys_lock_acquire(struct intr_frame* f, lock_t* lock) {
-  struct thread* t = thread_current();
-  struct process* pcb = t->pcb;
-  lock_acquire(&pcb->process_lock);
-  if (lock == NULL || *lock < 0 || *lock >= pcb->num_locks || pcb->lock_table[(int)*lock].holder == t) {
-    lock_release(&pcb->process_lock);
-    f->eax = false;
-  }
-  else {
-    lock_release(&pcb->process_lock);
-    lock_acquire(&pcb->lock_table[(int) *lock]);
-    f->eax = true;
-  }
-  return;
-}
-
-void sys_lock_release(struct intr_frame* f, lock_t* lock) {
-  struct thread* t = thread_current();
-  struct process* pcb = t->pcb;
-  lock_acquire(&pcb->process_lock);
-  if (lock == NULL || *lock < 0 || *lock >= pcb->num_locks || pcb->lock_table[(int) *lock].holder != t) {
-    f->eax = false;
-  }
-  else {
-    lock_release(&pcb->lock_table[(int) *lock]);
-    f->eax = true;
-  }
-  lock_release(&pcb->process_lock);
-  return;
-}
-
-void sys_sema_init(struct intr_frame* f, sema_t* sema, int val) {
-  struct process* pcb = thread_current()->pcb;
-  lock_acquire(&pcb->process_lock);
-  if (sema == NULL || val < 0 || pcb->num_semas > CHAR_MAX) {
-    f->eax = false;
-  } else {
-    *sema = pcb->num_semas;
-    sema_init(&pcb->sema_table[(int) *sema], val);
-    pcb->num_semas++;
-    f->eax = true;
-  }
-  lock_release(&pcb->process_lock);
-  return;
-}
-
-void sys_sema_down(struct intr_frame* f, sema_t* sema) {
-  struct process* pcb = thread_current()->pcb;
-  if (sema == NULL || (int) *sema < 0 || *sema >= pcb->num_semas) {
-    f->eax = false;
-  } else {
-    sema_down(&pcb->sema_table[(int) *sema]);
-    f->eax = true;
-  }
-  return;
-}
-
-void sys_sema_up(struct intr_frame* f, sema_t* sema) {
-  struct process* pcb = thread_current()->pcb;
-  if (sema == NULL || (int) *sema < 0 || *sema >= pcb->num_semas) {
-    f->eax = false;
-  } else {
-    sema_up(&pcb->sema_table[(int)*sema]);
-    f->eax = true;
-  }
-  return;
-}
-
-void sys_get_tid(struct intr_frame* f) {
-  f->eax = thread_tid();
-  return;
-}
-
 static void syscall_handler(struct intr_frame* f UNUSED) {
   uint32_t* args = ((uint32_t*)f->esp);
 
@@ -438,7 +294,6 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       break;
     case SYS_CREATE:
     case SYS_SEEK:
-    case SYS_SEMA_INIT:
       num_args = 2;
       break;
     case SYS_PRACTICE:
@@ -451,11 +306,6 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     case SYS_FILESIZE:
     case SYS_TELL:
     case SYS_CLOSE:
-    case SYS_LOCK_INIT:
-    case SYS_LOCK_RELEASE:
-    case SYS_LOCK_ACQUIRE:
-    case SYS_SEMA_DOWN:
-    case SYS_SEMA_UP:
       num_args = 1;
       break;
     default:
@@ -533,47 +383,6 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     /* FPU ops */
     case SYS_COMPUTE_E:
       sys_comp_e(f, args[1]);
-      break;
-
-    /* For project 2 task 3 */
-    case SYS_PT_CREATE:    /* Creates a new thread */
-      sys_pthread_create(f, (stub_fun)args[1], (pthread_fun)args[2], (void *)args[3]);
-      break;
-    case SYS_PT_EXIT:       /* Exits the current thread */
-      sys_pthread_exit(f);
-      break;
-    case SYS_PT_JOIN:       /* Waits for thread to finish */
-      sys_pthread_join(f, args[1]);
-      break;
-    case SYS_LOCK_INIT:     /* Initializes a lock */
-      if (!is_valid_addr((uint32_t) &args[1])) {
-        sys_exit(f, -1);
-      }
-      sys_lock_init(f, (lock_t *)args[1]);
-      break;
-    case SYS_LOCK_ACQUIRE:  /* Acquires a lock */
-      if (!is_valid_addr((uint32_t) &args[1])) {
-        sys_exit(f, -1);
-      }
-      sys_lock_acquire(f, (lock_t *)args[1]);
-      break;
-    case SYS_LOCK_RELEASE:  /* Releases a lock */
-      if (!is_valid_addr((uint32_t) &args[1])) {
-        sys_exit(f, -1);
-      }
-      sys_lock_release(f, (lock_t *)args[1]);
-      break;
-    case SYS_SEMA_INIT:     /* Initializes a semaphore */
-      sys_sema_init(f, (sema_t *)args[1], args[2]);
-      break;
-    case SYS_SEMA_DOWN:     /* Downs a semaphore */
-      sys_sema_down(f, (sema_t *)args[1]);
-      break;
-    case SYS_SEMA_UP:       /* Ups a semaphore */
-      sys_sema_up(f, (sema_t *)args[1]);
-      break;
-    case SYS_GET_TID:       /* Gets TID of the current thread */
-      sys_get_tid(f);
       break;
     
     default:
