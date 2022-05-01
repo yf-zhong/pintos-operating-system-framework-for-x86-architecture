@@ -87,26 +87,11 @@ struct thread {
   enum thread_status status; /* Thread state. */
   char name[16];             /* Name (for debugging purposes). */
   uint8_t* stack;            /* Saved stack pointer. */
+  int priority;              /* Priority. */
   struct list_elem allelem;  /* List element for all threads list. */
 
   /* Shared between thread.c and synch.c. */
   struct list_elem elem; /* List element. */
-
-  /* For project 2 task 1: efficient alarm clock */
-  int64_t wakeup_time;
-  struct list_elem sleep_elem;
-
-  /* For project 2 task 2: strict priority scheduler */
-  int priority;
-  int base_priority;
-  struct list holding_locks;
-  struct lock* waiting_lock;
-
-  /* For project 2 task 3: user thread */
-  struct semaphore join_sema;      /* Default 0 when thread created */
-  struct semaphore* join_sema_ptr; /* Default -1 when no thread tries to join current thread */
-  void* upage;
-  struct list_elem proc_elem;
 
 #ifdef USERPROG
   /* Owned by process.c. */
@@ -116,9 +101,6 @@ struct thread {
   /* Owned by thread.c. */
   unsigned magic; /* Detects stack overflow. */
 };
-
-/* for storing all sleeping threads */
-struct list sleep_theads_list;
 
 /* Types of scheduler that the user can request the kernel
  * use to schedule threads at runtime. */
@@ -158,10 +140,6 @@ void thread_yield(void);
 /* Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func(struct thread* t, void* aux);
 void thread_foreach(thread_action_func*, void*);
-
-int max(int, int);
-/* find the highest priority in holding lock list of current thread */
-int find_highest_priority(void);
 
 int thread_get_priority(void);
 void thread_set_priority(int);

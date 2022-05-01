@@ -8,9 +8,6 @@
 struct semaphore {
   unsigned value;      /* Current value. */
   struct list waiters; /* List of waiting threads. */
-
-  /* for project 2 task 2: strict priority scheduler */
-  int highest_priority;
 };
 
 void sema_init(struct semaphore*, unsigned value);
@@ -23,9 +20,6 @@ void sema_self_test(void);
 struct lock {
   struct thread* holder;      /* Thread holding lock (for debugging). */
   struct semaphore semaphore; /* Binary semaphore controlling access. */
-
-  /* for project 2 task 2: strict priority scheduler */
-  struct list_elem elem;
 };
 
 void lock_init(struct lock*);
@@ -33,10 +27,6 @@ void lock_acquire(struct lock*);
 bool lock_try_acquire(struct lock*);
 void lock_release(struct lock*);
 bool lock_held_by_current_thread(const struct lock*);
-
-/* for project 2 task 2: strict priority scheduler */
-void update_holder_priority(struct thread* t, int pri);
-void update_lock_priority(struct lock* l, int pri);
 
 /* Condition variable. */
 struct condition {

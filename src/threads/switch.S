@@ -43,7 +43,7 @@ switch_threads:
 
 	# Restore stack pointer from new thread's stack.
 	movl SWITCH_NEXT(%esp), %ecx
-	movl (%ecx,%edx,1), %esp		# thread is switched here
+	movl (%ecx,%edx,1), %esp
 
 	# Restore FPU registers.
 	FRSTOR (%esp)

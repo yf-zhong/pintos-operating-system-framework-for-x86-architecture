@@ -33,9 +33,6 @@ static void real_time_delay(int64_t num, int32_t denom);
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
 void timer_init(void) {
-  /* For project 2 task 1 */
-  list_init(&sleep_theads_list);
-
   pit_configure_channel(0, 2, TIMER_FREQ);
   intr_register_ext(0x20, timer_interrupt, "8254 Timer");
 }
@@ -80,28 +77,10 @@ int64_t timer_elapsed(int64_t then) { return timer_ticks() - then; }
    be turned on. */
 void timer_sleep(int64_t ticks) {
   int64_t start = timer_ticks();
-  struct thread* t = thread_current();
-  t->wakeup_time = start + ticks;
 
-  enum intr_level old_level;
-  old_level = intr_disable();
-  bool inserted = false;
-  struct list_elem* e = list_begin(&sleep_theads_list);
-  while (e != list_end(&sleep_theads_list)) {
-    struct thread* sleeping_thread = list_entry(e, struct thread, sleep_elem);
-    if (sleeping_thread->wakeup_time < t->wakeup_time) {
-      e = list_next(e);
-    } else {
-      inserted = true;
-      list_insert(e, &t->sleep_elem);
-      break;
-    }
-  }
-  if (inserted == false) {
-    list_push_back(&sleep_theads_list, &t->sleep_elem);
-  }
-  thread_block();
-  intr_set_level(old_level);
+  ASSERT(intr_get_level() == INTR_ON);
+  while (timer_elapsed(start) < ticks)
+    thread_yield();
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -149,16 +128,7 @@ void timer_print_stats(void) { printf("Timer: %" PRId64 " ticks\n", timer_ticks(
 /* Timer interrupt handler. */
 static void timer_interrupt(struct intr_frame* args UNUSED) {
   ticks++;
-  for (struct list_elem* e = list_begin(&sleep_theads_list); e != list_end(&sleep_theads_list);
-       e = list_next(e)) {
-    struct thread* t = list_entry(e, struct thread, sleep_elem);
-    if (t->wakeup_time <= timer_ticks()) {
-      list_remove(e);
-      thread_unblock(t);
-    } else {
-      break;
-    }
-  }
+  thread_tick();
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
