@@ -15,7 +15,7 @@
 struct inode_disk {
   block_sector_t direct[12]; /* Direct block pointer. */
   block_sector_t indirect; /* Indirect block pointer. */
-  block_sector_t indirect_double /* Double indirect block pointer. */
+  block_sector_t indirect_double; /* Double indirect block pointer. */
 
   off_t length;         /* File size in bytes. */
   unsigned magic;       /* Magic number. */
@@ -23,8 +23,20 @@ struct inode_disk {
 };
 
 /* Returns the number of sectors to allocate for an inode SIZE
-   bytes long. */
+   bytes long, not inlcude internal or root. */
 static inline size_t bytes_to_sectors(off_t size) { return DIV_ROUND_UP(size, BLOCK_SECTOR_SIZE); }
+
+/* Return the number of all sectors for an inode SIZE bytes, including root and internal nodes */
+static size_t bytes_to_blocks(off_t size) {
+  size_t data_num = bytes_to_sectors(size);
+  if (data_num <= 12) {
+    return data_num + 1;
+  } else if (data_num <= 128 + 12) {
+    return data_num + 2;
+  } else {
+    return data_num + (data_num - 140) / 128 + 3;
+  }
+}
 
 /* In-memory inode. */
 struct inode {
@@ -42,19 +54,27 @@ struct inode {
    POS. */
 static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
   ASSERT(inode != NULL);
-  int sector_num = pos / BLOCK_SECTOR_SIZE;
-  struct inode_disk* inode_content = find_block_and_acq_lock(inode->sector, true)->content;
-  if (sector_num < 12) {
-    return inode_content->direct[sector_num];
-  } else if (sector_num < 128) {
+  size_t sector_num = bytes_to_sectors(pos);
+  struct cache_block* b = find_block_and_acq_lock(inode->sector, true);
+  struct inode_disk* inode_content = b->content;
+  rw_lock_release(&b->lock);
+  if (sector_num <= 12) {
+    return inode_content->direct[sector_num - 1];
+  } else if (sector_num <= 128 + 12) {
     sector_num -= 12;
-    block_sector_t* indir_content = find_block_and_acq_lock(inode_content->indirect, true)->content;
-    return indir_content[sector_num];
+    b = find_block_and_acq_lock(inode->sector, true);
+    block_sector_t* indir_content = b->content;
+    rw_lock_release(&b->lock);
+    return indir_content[sector_num - 1];
   } else {
-    sector_num -= 128;
-    block_sector_t* indir2_content = find_block_and_acq_lock(inode_content->indirect_double, true)->content;
-    block_sector_t* indir_content = find_block_and_acq_lock(indir2_content[sector_num / 128], true)->content;
-    return indir_content[sector_num % 128];
+    sector_num -= 128 + 12;
+    b = find_block_and_acq_lock(inode_content->indirect_double, true);
+    block_sector_t* indir2_content = b->content;
+    rw_lock_release(&b->lock);
+    b = find_block_and_acq_lock(indir2_content[sector_num / 128], true);
+    block_sector_t* indir_content = b->content;
+    rw_lock_release(&b->lock);
+    return indir_content[sector_num % 128 - 1];
   }
 }
 
@@ -143,6 +163,26 @@ struct inode* inode_reopen(struct inode* inode) {
   if (inode != NULL)
     inode->open_cnt++;
   return inode;
+}
+
+bool inode_resize(struct inode* ind, off_t size) {
+  lock_acquire(&ind->inode_lock);
+  struct inode_disk* ind_d = find_block_and_acq_lock(ind->sector, true)->content;
+  size_t num_block_old = bytes_to_blocks(ind_d->length);
+  size_t num_block_new = bytes_to_blocks(size);
+  if (num_block_new <= num_block_old) {
+    return true;
+  }
+  size_t new_alloc_num = num_block_new - num_block_old;
+  block_sector_t new_block_list[new_alloc_num];
+  bool success = free_map_allocate_non_consecutive(new_alloc_num, &new_block_list);
+  if (!success) {
+    lock_release(&ind->inode_lock);
+    return false;
+  }
+  // if 
+
+  lock_release(&ind->inode_lock);
 }
 
 /* Returns INODE's inode number. */
