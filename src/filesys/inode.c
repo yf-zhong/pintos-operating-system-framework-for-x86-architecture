@@ -36,26 +36,40 @@ struct inode {
   struct lock inode_lock /* Lock for each inode struct. */  
 };
 
-struct lock inode_list_lock;
-
 /* Returns the block device sector that contains byte offset POS
    within INODE.
    Returns -1 if INODE does not contain data for a byte at offset
    POS. */
 static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
   ASSERT(inode != NULL);
-  if (pos < inode->data.length)
-    return inode->data.start + pos / BLOCK_SECTOR_SIZE;
-  else
-    return -1;
+  int sector_num = pos / BLOCK_SECTOR_SIZE;
+  struct inode_disk* inode_content = find_block_and_acq_lock(inode->sector, true)->content;
+  if (sector_num < 12) {
+    return inode_content->direct[sector_num];
+  } else if (sector_num < 128) {
+    sector_num -= 12;
+    block_sector_t* indir_content = find_block_and_acq_lock(inode_content->indirect, true)->content;
+    return indir_content[sector_num];
+  } else {
+    sector_num -= 128;
+    block_sector_t* indir2_content = find_block_and_acq_lock(inode_content->indirect_double, true)->content;
+    block_sector_t* indir_content = find_block_and_acq_lock(indir2_content[sector_num / 128], true)->content;
+    return indir_content[sector_num % 128];
+  }
 }
 
 /* List of open inodes, so that opening a single inode twice
    returns the same `struct inode'. */
 static struct list open_inodes;
 
+/* Protect open inode list */
+struct lock inode_list_lock;
+
 /* Initializes the inode module. */
-void inode_init(void) { list_init(&open_inodes); }
+void inode_init(void) {
+  list_init(&open_inodes);
+  lock_init(&inode_list_lock);
+}
 
 /* Initializes an inode with LENGTH bytes of data and
    writes the new inode to sector SECTOR on the file system
