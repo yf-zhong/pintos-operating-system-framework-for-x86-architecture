@@ -21,6 +21,7 @@ void filesys_init(bool format) {
 
   inode_init();
   free_map_init();
+  cache_init();
 
   if (format)
     do_format();
@@ -30,7 +31,10 @@ void filesys_init(bool format) {
 
 /* Shuts down the file system module, writing any unwritten data
    to disk. */
-void filesys_done(void) { free_map_close(); }
+void filesys_done(void) {
+  cache_destroy();
+  free_map_close();
+}
 
 /* Creates a file named NAME with the given INITIAL_SIZE.
    Returns true if successful, false otherwise.

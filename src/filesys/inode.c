@@ -6,6 +6,7 @@
 #include "filesys/filesys.h"
 #include "filesys/free-map.h"
 #include "threads/malloc.h"
+#include "threads/synch.h"
 
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
@@ -32,6 +33,112 @@ struct inode {
   int deny_write_cnt;     /* 0: writes ok, >0: deny writes. */
   struct inode_disk data; /* Inode content. */
 };
+
+struct cache_block {
+  char content[BLOCK_SECTOR_SIZE];
+  bool is_dirty;
+  bool is_valid;
+  block_sector_t bst;
+  struct rw_lock lock;
+  struct list_elem elem;
+};
+
+struct list cache;
+struct lock cache_lock;
+
+
+struct cache_block* new_cache_block();
+struct cache_block* find_block_and_acq_lock(block_sector_t bst, bool reader);
+void cache_read(void* dest, block_sector_t bst);
+void cache_write(void* src, block_sector_t bst);
+
+/* make a new cache block */
+struct cache_block* new_cache_block() {
+  struct cache_block* b = (struct cache_block*) calloc(sizeof(struct cache_block), 1);
+  b->is_dirty = false;
+  b->is_valid = false;
+  rw_lock_init(&b->lock);
+  return b;
+}
+
+/* initialize 64 blocks in cache and the cache lock */
+void cache_init() {
+  list_init(&cache);
+  lock_init(&cache_lock);
+  for (int i = 0; i < 64; i++) {
+    struct cache_block* b = new_cache_block();
+    list_push_front(&cache, &b->elem);
+  }
+}
+
+void cache_read(void* dest, block_sector_t bst) {
+  struct cache_block* b = find_block_and_acq_lock(bst, true);
+  memcpy(dest, b->content, BLOCK_SECTOR_SIZE);
+  rw_lock_release(&b->lock, true);
+}
+
+void cache_write(void* src, block_sector_t bst) {
+  struct cache_block* b = find_block_and_acq_lock(bst, false);
+  memcpy(b->content, src, BLOCK_SECTOR_SIZE);
+  b->is_dirty = true;
+  rw_lock_release(&b->lock, false);
+}
+
+/* find the cache block corespond to the given sector, 
+   if none match, evict the oldest unused one and cache the new block. 
+   This function will acquire the lock in the cache block but won't release it upon return
+   So caller should release the lock when its work is done
+*/
+struct cache_block* find_block_and_acq_lock(block_sector_t bst, bool reader) {
+  bool not_found = true;
+  // acquire lock for the cache so only 1 thread can access the cache at a time
+  lock_acquire(&cache_lock);
+  struct list_elem* e = list_begin(&cache);
+  struct cache_block* b;
+  // find the cache block corespond to the given sector
+  while (e != list_end(&cache) && not_found) {
+    b = list_entry(e, struct cache_block, elem);
+    if (b->is_valid && b->bst == bst) {
+      not_found = false;
+    }
+    e = list_next(e);
+  }
+  // if sector is in cache, b is the block of that sector in cache
+  // if sector is not in cache, b is the last block in cache
+  e = &b->elem;
+  // move the block to the front of the cache
+  list_remove(e);
+  list_push_front(&cache, e);
+  if (not_found) {
+    rw_lock_acquire(&b->lock, false);
+    // write cache block to disk if it is valid and dirty
+    if (b->is_valid && b->is_dirty) {
+      block_write(fs_device, b->bst, b->content);
+    }
+    // update cache block content and sector number, mark the cache block valid and not dirty
+    b->bst = bst;
+    block_read(fs_device, bst, b->content);
+    b->is_valid = true;
+    b->is_dirty = false;
+    rw_lock_release(&b->lock, false);
+  }
+  rw_lock_acquire(&b->lock, reader);
+  lock_release(&cache_lock);
+  return b;
+}
+
+void cache_destroy() {
+  while (list_empty(&cache)) {
+    struct list_elem* e = list_pop_front(&cache);
+    struct cache_block* b = list_entry(e, struct cache_block, elem);
+    // write any dirty block to disk
+    if (b->is_valid && b->is_dirty) {
+      block_write(fs_device, b->bst, b->content);
+    }
+    free(b);
+  }
+}
+
 
 /* Returns the block device sector that contains byte offset POS
    within INODE.
@@ -184,7 +291,7 @@ off_t inode_read_at(struct inode* inode, void* buffer_, off_t size, off_t offset
 
     if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE) {
       /* Read full sector directly into caller's buffer. */
-      block_read(fs_device, sector_idx, buffer + bytes_read);
+      cache_read(buffer + bytes_read, sector_idx);
     } else {
       /* Read sector into bounce buffer, then partially copy
              into caller's buffer. */
@@ -193,7 +300,7 @@ off_t inode_read_at(struct inode* inode, void* buffer_, off_t size, off_t offset
         if (bounce == NULL)
           break;
       }
-      block_read(fs_device, sector_idx, bounce);
+      cache_read(bounce, sector_idx);
       memcpy(buffer + bytes_read, bounce + sector_ofs, chunk_size);
     }
 
@@ -237,7 +344,7 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
 
     if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE) {
       /* Write full sector directly to disk. */
-      block_write(fs_device, sector_idx, buffer + bytes_written);
+      cache_write(buffer + bytes_written, sector_idx);
     } else {
       /* We need a bounce buffer. */
       if (bounce == NULL) {
@@ -250,11 +357,11 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
              we're writing, then we need to read in the sector
              first.  Otherwise we start with a sector of all zeros. */
       if (sector_ofs > 0 || chunk_size < sector_left)
-        block_read(fs_device, sector_idx, bounce);
+        cache_read(bounce, sector_idx);
       else
         memset(bounce, 0, BLOCK_SECTOR_SIZE);
       memcpy(bounce + sector_ofs, buffer + bytes_written, chunk_size);
-      block_write(fs_device, sector_idx, bounce);
+      cache_write(bounce, sector_idx);
     }
 
     /* Advance. */
