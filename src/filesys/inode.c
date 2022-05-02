@@ -165,24 +165,96 @@ struct inode* inode_reopen(struct inode* inode) {
   return inode;
 }
 
+/* Call resize in file write. */
 bool inode_resize(struct inode* ind, off_t size) {
   lock_acquire(&ind->inode_lock);
-  struct inode_disk* ind_d = find_block_and_acq_lock(ind->sector, true)->content;
+  // Find inode_disk with given inode
+  struct cache_block* b = find_block_and_acq_lock(ind->sector, true);
+  struct inode_disk* ind_d = b->content;
+  b->is_dirty = true;
+  rw_lock_release(&b->lock);
+
+  // Get block number including all internal and root block
   size_t num_block_old = bytes_to_blocks(ind_d->length);
   size_t num_block_new = bytes_to_blocks(size);
   if (num_block_new <= num_block_old) {
+    lock_release(&ind->inode_lock);
     return true;
   }
+
+  // Allocate blocks from free map in advance
   size_t new_alloc_num = num_block_new - num_block_old;
   block_sector_t new_block_list[new_alloc_num];
   bool success = free_map_allocate_non_consecutive(new_alloc_num, &new_block_list);
   if (!success) {
+    //TODO: reset is_dirty to false if fail?
     lock_release(&ind->inode_lock);
     return false;
   }
-  // if 
 
-  lock_release(&ind->inode_lock);
+  int new_list_i = 0;
+  // Handle direct pointer
+  for (int i = 0; i < 12; i++) {
+    if (size > BLOCK_SECTOR_SIZE * i && ind_d->direct[i] == 0) {
+      ind_d->direct[i] = new_block_list[new_list_i++];
+      static char zeros[BLOCK_SECTOR_SIZE];
+      block_write(fs_device, new_block_list[i], zeros);
+    }
+  }
+  if (ind_d->indirect == 0 && size <= 12 * BLOCK_SECTOR_SIZE) {
+    ind_d->length = size;
+    lock_release(&ind->inode_lock);
+    return true;
+  }
+  block_sector_t buffer[128];
+  memset(buffer, 0, 512);
+  // Create indirect pointer if not exist, read from disk otherwise
+  if (ind_d->indirect == 0) {
+    ind_d->indirect = new_block_list[new_list_i++];
+  } else {
+    block_read(ind_d->indirect, buffer);
+  }
+  // Handle indirect pointer value
+  for (int i = 0; i < 128; i++) {
+    if (size > (12 + i) * BLOCK_SECTOR_SIZE && buffer[i] == 0) {
+      buffer[i] = new_block_list[new_list_i++];
+    }
+  }
+  block_write(fs_device, ind_d->indirect, buffer);
+  if (ind_d->indirect_double == 0 && size <= 150 * BLOCK_SECTOR_SIZE) {
+    ind_d->length = size;
+    lock_release(&ind->inode_lock);
+    return true;
+  }
+
+  // Handle doubly indirect pointer
+  block_sector_t buffer[128];
+  memset(buffer, 0, 512);
+  // Load doubly indirect pointer into buffer
+  if (ind_d->indirect_double == 0) {
+    ind_d->indirect_double = new_block_list[new_list_i++];
+  } else {
+    blcok_read(ind_d->indirect_double, buffer);
+  }
+  for (int i = 0; i < 128; i++) {
+    block_sector_t buffer2[128];
+    memset(buffer2, 0, 512);
+    if (buffer[i] == 0) {
+      buffer[i] = new_block_list[new_list_i++];
+    } else {
+      block_read(buffer[i], buffer2);
+    }
+    for (int j = 0; j < 128; j++) {
+      if (size > (150 + i * 128 + j) * BLOCK_SECTOR_SIZE && buffer2[j] == 0) {
+        buffer2[j] = new_block_list[new_list_i++];
+      }
+    }
+    block_write(fs_device, buffer[i], buffer2);
+  }
+  block_write(fs_device, ind_d->indirect_double, buffer);
+  ind_d->length = size;
+  lock_release(&ind_>inode_lock);
+  return true;
 }
 
 /* Returns INODE's inode number. */
