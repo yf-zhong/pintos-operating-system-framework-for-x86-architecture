@@ -26,6 +26,23 @@ void sys_exec(struct intr_frame*, const char*);
 void sys_wait(struct intr_frame*, pid_t);
 void sys_exit(struct intr_frame*, int);
 
+/* File operation syscalls */
+void sys_create(struct intr_frame*, const char*, unsigned);
+void sys_remove(struct intr_frame*, const char*);
+void sys_open(struct intr_frame*, const char*);
+void sys_filesize(struct intr_frame*, int);
+void sys_read(struct intr_frame*, int, void*, unsigned);
+void sys_write(struct intr_frame*, int, const void*, unsigned);
+void sys_seek(struct intr_frame*, int, unsigned);
+void sys_tell(struct intr_frame*, int);
+void sys_close(struct intr_frame*, int);
+
+/* FPU ops */
+void sys_comp_e(struct intr_frame*, int);
+
+/* File sytem syscall */
+// void sys_inumber(struct intr_frame*, int);
+
 bool is_valid_addr(uint32_t addr) {
   uint32_t* pd = thread_current()->pcb->pagedir;
   for (int i = 0; i < 4; i++) {
@@ -271,17 +288,18 @@ void sys_comp_e(struct intr_frame* f, int num) {
   return;
 }
 
-void sys_inumber(struct intr_frame* f, int fd) {
-  if (fd < 0) {
-    printf("fd: %d is invalid.", fd);
-    f->eax = -1;
-    return;
-  }
-  struct file_descriptor* cur_file_des = find_file_des(fd);
-  struct inode* inode = cur_file_des->file->inode;
-  f->eax = inode_get_inumber(inode);
-  return;
-}
+//TODO: Implement sys_inumber().
+// void sys_inumber(struct intr_frame* f, int fd) {
+//   if (fd < 0) {
+//     printf("fd: %d is invalid.", fd);
+//     f->eax = -1;
+//     return;
+//   }
+//   struct file_descriptor* cur_file_des = find_file_des(fd);
+//   struct inode* inode = cur_file_des->file->inode;
+//   f->eax = inode_get_inumber(inode);
+//   return;
+// }
 
 static void syscall_handler(struct intr_frame* f UNUSED) {
   uint32_t* args = ((uint32_t*)f->esp);
@@ -398,10 +416,10 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       sys_comp_e(f, args[1]);
       break;
 
-    /* File system inode */
-    case SYS_INUMBER:
-      sys_inumber(f, arg[1]);
-      break;
+    /*TODO: File system inode */
+    // case SYS_INUMBER:
+    //   sys_inumber(f, args[1]);
+    //   break;
   
     default:
       f->eax = -1; /* If the NUMBER is not defined */

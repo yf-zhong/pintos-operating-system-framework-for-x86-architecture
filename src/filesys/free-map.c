@@ -42,7 +42,7 @@ bool free_map_allocate(size_t cnt, block_sector_t* sectorp) {
 /* Allocates cnt non-consecutive sectors from the free map and stores them into sectorpp */
 bool free_map_allocate_non_consecutive(size_t cnt, block_sector_t** sectorpp) {
   bool success = true;
-  for (int i = 0; i < cnt; i++) {
+  for (size_t i = 0; i < cnt; i++) {
     success = free_map_allocate(1, sectorpp[i]);
     if (!success) {
       // If any allocation fail, release all previous allocated blocks
