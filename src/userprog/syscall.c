@@ -14,6 +14,7 @@
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 #include "lib/float.h"
+#include "filesys/inode.h"
 
 static void syscall_handler(struct intr_frame*);
 
@@ -24,6 +25,7 @@ void sys_halt(void);
 void sys_exec(struct intr_frame*, const char*);
 void sys_wait(struct intr_frame*, pid_t);
 void sys_exit(struct intr_frame*, int);
+
 
 bool is_valid_addr(uint32_t addr) {
   uint32_t* pd = thread_current()->pcb->pagedir;
@@ -119,7 +121,6 @@ void sys_open(struct intr_frame* f, const char* file) {
   lock_release(&file_sys_lock);
   if (!new_file) {
     f->eax = -1;
-    lock_release(&file_sys_lock);
     return;
   }
   struct file_descriptor *new_file_descriptor = (struct file_descriptor *) malloc(sizeof(struct file_descriptor));
@@ -383,6 +384,18 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     /* FPU ops */
     case SYS_COMPUTE_E:
       sys_comp_e(f, args[1]);
+      break;
+
+    case SYS_CACHE_HIT:
+      f->eax = get_cache_hit_cnt();
+      break;
+
+    case SYS_CACHE_MISS:
+      f->eax = get_cache_miss_cnt();
+      break;
+
+    case SYS_CACHE_RESET:
+      cache_reset();
       break;
     
     default:
