@@ -45,7 +45,7 @@ struct inode {
   int open_cnt;           /* Number of openers. */
   bool removed;           /* True if deleted, false otherwise. */
   int deny_write_cnt;     /* 0: writes ok, >0: deny writes. */
-  struct lock inode_lock /* Lock for each inode struct. */  
+  struct lock inode_lock; /* Lock for each inode struct. */  
 };
 
 /* Returns the block device sector that contains byte offset POS
@@ -222,12 +222,16 @@ struct inode* inode_open(block_sector_t sector) {
     return NULL;
 
   /* Initialize. */
+  lock_acquire(&inode_list_lock);
   list_push_front(&open_inodes, &inode->elem);
+  lock_acquire(&inode->inode_lock);
   inode->sector = sector;
   inode->open_cnt = 1;
   inode->deny_write_cnt = 0;
   inode->removed = false;
   block_read(fs_device, inode->sector, &inode->data);
+  lock_release(&inode->inode_lock);
+  lock_release(&inode_list_lock);
   return inode;
 }
 
