@@ -23,7 +23,7 @@ off_t inode_length(const struct inode*);
 void cache_init(void);
 void cache_destroy(void);
 void cache_reset(void);
-int get_cache_hit_cnt(void);
-int get_cache_miss_cnt(void);
+unsigned int get_cache_hit_cnt(void);
+unsigned int get_cache_miss_cnt(void);
 
 #endif /* filesys/inode.h */

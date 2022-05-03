@@ -42,8 +42,8 @@ struct cache_block {
   struct rw_lock lock;
   struct list_elem elem;
   // for testing purpose
-  int hit_cnt;
-  int miss_cnt;
+  unsigned int hit_cnt;
+  unsigned int miss_cnt;
 };
 
 struct list cache;
@@ -160,7 +160,7 @@ void cache_reset() {
   cache_init();
 }
 
-int get_cache_hit_cnt() {
+unsigned int get_cache_hit_cnt() {
   int total_hit_cnt = 0;
   lock_acquire(&cache_lock);
   struct list_elem* e = list_begin(&cache);
@@ -173,7 +173,7 @@ int get_cache_hit_cnt() {
   return total_hit_cnt;
 }
 
-int get_cache_miss_cnt() {
+unsigned int get_cache_miss_cnt() {
   int total_miss_cnt = 0;
   lock_acquire(&cache_lock);
   struct list_elem* e = list_begin(&cache);

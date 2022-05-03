@@ -12,6 +12,26 @@ struct block* fs_device;
 
 static void do_format(void);
 
+unsigned int total_block_read() {
+  unsigned int cnt = 0;
+  struct block* b = block_first();
+  while (b != NULL) {
+    cnt += read_cnt(b);
+    b = block_next(b);
+  }
+  return cnt;
+}
+
+unsigned int total_block_write() {
+  unsigned int cnt = 0;
+  struct block* b = block_first();
+  while (b != NULL) {
+    cnt += write_cnt(b);
+    b = block_next(b);
+  }
+  return cnt;
+}
+
 /* Initializes the file system module.
    If FORMAT is true, reformats the file system. */
 void filesys_init(bool format) {
