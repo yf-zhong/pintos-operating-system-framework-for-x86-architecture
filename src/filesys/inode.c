@@ -41,6 +41,9 @@ struct cache_block {
   block_sector_t bst;
   struct rw_lock lock;
   struct list_elem elem;
+  // for testing purpose
+  int hit_cnt;
+  int miss_cnt;
 };
 
 struct list cache;
@@ -58,6 +61,8 @@ struct cache_block* new_cache_block() {
   b->is_dirty = false;
   b->is_valid = false;
   rw_lock_init(&b->lock);
+  b->hit_cnt = 0;
+  b->miss_cnt = 0;
   return b;
 }
 
@@ -110,6 +115,7 @@ struct cache_block* find_block_and_acq_lock(block_sector_t bst, bool reader) {
   list_remove(e);
   list_push_front(&cache, e);
   if (not_found) {
+    b->miss_cnt++;
     rw_lock_acquire(&b->lock, false);
     // write cache block to disk if it is valid and dirty
     if (b->is_valid && b->is_dirty) {
@@ -122,21 +128,62 @@ struct cache_block* find_block_and_acq_lock(block_sector_t bst, bool reader) {
     b->is_dirty = false;
     rw_lock_release(&b->lock, false);
   }
+  else {
+    b->hit_cnt++;
+  }
   rw_lock_acquire(&b->lock, reader);
   lock_release(&cache_lock);
   return b;
 }
 
 void cache_destroy() {
-  while (list_empty(&cache)) {
+  while (!list_empty(&cache)) {
     struct list_elem* e = list_pop_front(&cache);
     struct cache_block* b = list_entry(e, struct cache_block, elem);
+    // acquire write lock because we want to destroy the cache block, 
+    // so wait for any access from other threads to finish
+    rw_lock_acquire(&b->lock, false);
     // write any dirty block to disk
     if (b->is_valid && b->is_dirty) {
       block_write(fs_device, b->bst, b->content);
     }
+    // can release the lock before destroying the block because thread holds the cache lock,
+    // so no other thread can access the destroying block
+    rw_lock_release(&b->lock, false);
     free(b);
   }
+}
+
+void cache_reset() {
+  lock_acquire(&cache_lock);
+  cache_destroy();
+  cache_init();
+}
+
+int get_cache_hit_cnt() {
+  int total_hit_cnt = 0;
+  lock_acquire(&cache_lock);
+  struct list_elem* e = list_begin(&cache);
+  while (e != list_end(&cache)) {
+    struct cache_block* b = list_entry(e, struct cache_block, elem);
+    total_hit_cnt += b->hit_cnt;
+    e = list_next(e);
+  }
+  lock_release(&cache_lock);
+  return total_hit_cnt;
+}
+
+int get_cache_miss_cnt() {
+  int total_miss_cnt = 0;
+  lock_acquire(&cache_lock);
+  struct list_elem* e = list_begin(&cache);
+  while (e != list_end(&cache)) {
+    struct cache_block* b = list_entry(e, struct cache_block, elem);
+    total_miss_cnt += b->miss_cnt;
+    e = list_next(e);
+  }
+  lock_release(&cache_lock);
+  return total_miss_cnt;
 }
 
 
@@ -180,13 +227,13 @@ bool inode_create(block_sector_t sector, off_t length) {
     disk_inode->length = length;
     disk_inode->magic = INODE_MAGIC;
     if (free_map_allocate(sectors, &disk_inode->start)) {
-      block_write(fs_device, sector, disk_inode);
+      cache_write(disk_inode, sector);
       if (sectors > 0) {
         static char zeros[BLOCK_SECTOR_SIZE];
         size_t i;
 
         for (i = 0; i < sectors; i++)
-          block_write(fs_device, disk_inode->start + i, zeros);
+          cache_write(zeros, disk_inode->start + i);
       }
       success = true;
     }
@@ -222,7 +269,7 @@ struct inode* inode_open(block_sector_t sector) {
   inode->open_cnt = 1;
   inode->deny_write_cnt = 0;
   inode->removed = false;
-  block_read(fs_device, inode->sector, &inode->data);
+  cache_read(&inode->data, inode->sector);
   return inode;
 }
 
