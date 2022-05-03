@@ -27,7 +27,6 @@ void sys_exec(struct intr_frame*, const char*);
 void sys_wait(struct intr_frame*, pid_t);
 void sys_exit(struct intr_frame*, int);
 
-<<<<<<< HEAD
 /* File operation syscalls */
 void sys_create(struct intr_frame*, const char*, unsigned);
 void sys_remove(struct intr_frame*, const char*);
@@ -44,8 +43,6 @@ void sys_comp_e(struct intr_frame*, int);
 
 /* File sytem syscall */
 // void sys_inumber(struct intr_frame*, int);
-=======
->>>>>>> b4aa60bf9175c48c796ed6422c64ac59d5297789
 
 bool is_valid_addr(uint32_t addr) {
   uint32_t* pd = thread_current()->pcb->pagedir;
