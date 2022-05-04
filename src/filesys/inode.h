@@ -21,6 +21,8 @@ void inode_allow_write(struct inode*);
 off_t inode_length(const struct inode*);
 
 void cache_init(void);
+void cache_read(void*, block_sector_t);
+void cache_write(void*, block_sector_t);
 void cache_destroy(void);
 void cache_reset(void);
 int get_cache_hit_cnt(void);
