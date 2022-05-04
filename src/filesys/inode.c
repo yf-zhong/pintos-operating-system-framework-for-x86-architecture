@@ -409,8 +409,10 @@ struct inode* inode_open(block_sector_t sector) {
 
 /* Reopens and returns INODE. */
 struct inode* inode_reopen(struct inode* inode) {
+  lock_acquire(&inode->inode_lock);
   if (inode != NULL)
     inode->open_cnt++;
+  lock_release(&inode->inode_lock);
   return inode;
 }
 
@@ -510,8 +512,17 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
   off_t bytes_written = 0;
   uint8_t* bounce = NULL;
 
+  lock_acquire(&inode->inode_lock);
   if (inode->deny_write_cnt)
     return 0;
+
+  // Resize inode if necessary
+  off_t new_lenght = size + offset;
+  struct inode_disk* ind_d = NULL;
+  cache_read(ind_d, inode->sector);
+  if (new_lenght > ind_d->length) {
+    inode_resize(ind_d, new_lenght);
+  }
 
   while (size > 0) {
     /* Sector to write, starting byte offset within sector. */
@@ -556,24 +567,28 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
     bytes_written += chunk_size;
   }
   free(bounce);
-
+  lock_release(&inode->inode_lock);
   return bytes_written;
 }
 
 /* Disables writes to INODE.
    May be called at most once per inode opener. */
 void inode_deny_write(struct inode* inode) {
+  lock_acquire(&inode->inode_lock);
   inode->deny_write_cnt++;
   ASSERT(inode->deny_write_cnt <= inode->open_cnt);
+  lock_acquire(&inode->inode_lock);
 }
 
 /* Re-enables writes to INODE.
    Must be called once by each inode opener who has called
    inode_deny_write() on the inode, before closing the inode. */
 void inode_allow_write(struct inode* inode) {
+  lock_acquire(&inode->inode_lock);
   ASSERT(inode->deny_write_cnt > 0);
   ASSERT(inode->deny_write_cnt <= inode->open_cnt);
   inode->deny_write_cnt--;
+  lock_release(&inode->inode_lock);
 }
 
 /* Returns the length, in bytes, of INODE's data. */
