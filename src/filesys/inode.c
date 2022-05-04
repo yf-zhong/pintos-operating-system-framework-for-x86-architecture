@@ -274,7 +274,7 @@ bool inode_resize(struct inode_disk* ind_d, off_t size) {
       // Grow
       ind_d->direct[i] = new_block_list[new_list_i++];
       static char zeros[BLOCK_SECTOR_SIZE];
-      cache_write(zeros, new_block_list[i]);
+      cache_write(zeros, ind_d->direct[i]);
     }
   }
   if (ind_d->indirect == 0 && size <= 12 * BLOCK_SECTOR_SIZE) {
@@ -385,13 +385,16 @@ struct inode* inode_open(block_sector_t sector) {
   struct inode* inode;
 
   /* Check whether this inode is already open. */
+  lock_acquire(&inode_list_lock);
   for (e = list_begin(&open_inodes); e != list_end(&open_inodes); e = list_next(e)) {
     inode = list_entry(e, struct inode, elem);
     if (inode->sector == sector) {
       inode_reopen(inode);
+      lock_release(&inode_list_lock);
       return inode;
     }
   }
+  lock_release(&inode_list_lock);
 
   /* Allocate memory. */
   inode = malloc(sizeof *inode);
@@ -534,6 +537,7 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
   if (new_length > ind_d->length) {
     inode_resize(ind_d, new_length);
   }
+  cache_write(ind_d, inode->sector);
 
   while (size > 0) {
     /* Sector to write, starting byte offset within sector. */
