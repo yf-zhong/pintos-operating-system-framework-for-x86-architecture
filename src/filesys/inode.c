@@ -207,15 +207,20 @@ int get_cache_miss_cnt() {
 static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
   ASSERT(inode != NULL);
   size_t sector_num = bytes_to_sectors(pos);
-  struct inode_disk* inode_content = NULL;
+  struct inode_disk* inode_content = calloc(BLOCK_SECTOR_SIZE, 1);
+  if (inode_content == NULL) {
+    return -1;
+  }
   cache_read((void*)inode_content, inode->sector);
 
   if (sector_num <= 12) {
+    free(inode_content);
     return inode_content->direct[sector_num - 1];
   } else if (sector_num <= 140) {
     sector_num -= 12;
     block_sector_t indir_content[128];
     cache_read((void*)indir_content, inode_content->indirect);
+    free(inode_content);
     return indir_content[sector_num - 1];
   } else {
     sector_num -= 140;
@@ -226,7 +231,7 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
     // Read second level indirect pointer
     block_sector_t indir_content[128];
     cache_read((void*)indir_content, indir2_content[sector_num / 128]); // Start from 0, no need to + 1
-
+    free(inode_content);
     return indir_content[sector_num % 128 - 1];
   }
 }
@@ -436,13 +441,16 @@ void inode_close(struct inode* inode) {
 
     /* Deallocate blocks if removed. */
     if (inode->removed) {
-      struct inode_disk* ind_d = NULL;
+      struct inode_disk* ind_d = calloc(BLOCK_SECTOR_SIZE, 1);
+      if (ind_d == NULL) {
+        return;
+      }
       cache_read(ind_d, inode->sector);
       // Resize the inode to be 0 size so that all blocks are deallocated
       inode_resize(ind_d, 0);
       free_map_release(inode->sector, 1);
+      free(ind_d);
     }
-
     free(inode);
   }
 }
@@ -517,11 +525,14 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
     return 0;
 
   // Resize inode if necessary
-  off_t new_lenght = size + offset;
-  struct inode_disk* ind_d = NULL;
+  off_t new_length = size + offset;
+  struct inode_disk* ind_d = calloc(BLOCK_SECTOR_SIZE, 1);
+  if (ind_d == NULL) {
+    return 0;
+  }
   cache_read(ind_d, inode->sector);
-  if (new_lenght > ind_d->length) {
-    inode_resize(ind_d, new_lenght);
+  if (new_length > ind_d->length) {
+    inode_resize(ind_d, new_length);
   }
 
   while (size > 0) {
@@ -566,6 +577,7 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
     offset += chunk_size;
     bytes_written += chunk_size;
   }
+  free(ind_d);
   free(bounce);
   lock_release(&inode->inode_lock);
   return bytes_written;
@@ -593,7 +605,12 @@ void inode_allow_write(struct inode* inode) {
 
 /* Returns the length, in bytes, of INODE's data. */
 off_t inode_length(const struct inode* inode) {
-  struct inode_disk* ind_d = NULL;
+  struct inode_disk* ind_d = calloc(BLOCK_SECTOR_SIZE, 1);
+  if (ind_d == NULL) {
+    return -1;
+  }
   cache_read(ind_d, inode->sector);
-  return ind_d->length;
+  off_t length = ind_d->length;
+  free(ind_d);
+  return length;
 }
