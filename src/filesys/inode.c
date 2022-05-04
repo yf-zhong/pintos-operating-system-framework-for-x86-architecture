@@ -250,15 +250,11 @@ bool inode_resize(struct inode_disk* ind_d, off_t size) {
   size_t num_block_new = bytes_to_blocks(size);
   bool success = true;
 
-  block_sector_t** new_block_list;
-  // If new size is greater than the old size, we need to allocate block from free map
-  if (num_block_new > num_block_old) {
-    size_t new_alloc_num = num_block_new - num_block_old;
-    new_block_list = malloc(sizeof(block_sector_t*) * new_alloc_num);
-    success = free_map_allocate_non_consecutive(new_alloc_num, new_block_list);
-    if (!success) {
-      return false;
-    }
+  size_t new_alloc_num = (num_block_new - num_block_old) > 0 ? (num_block_new - num_block_old) : 0;
+  block_sector_t *new_block_list[new_alloc_num];
+  success = free_map_allocate_non_consecutive(new_alloc_num, new_block_list);
+  if (!success) {
+    return false;
   }
 
   int new_list_i = 0;
