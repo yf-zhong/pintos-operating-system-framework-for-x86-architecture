@@ -6,30 +6,19 @@
 #include "filesys/free-map.h"
 #include "filesys/inode.h"
 #include "filesys/directory.h"
+#include "filesys/cache.h"
 
 /* Partition that contains the file system. */
 struct block* fs_device;
 
 static void do_format(void);
 
-unsigned int total_block_read() {
-  unsigned int cnt = 0;
-  struct block* b = block_first();
-  while (b != NULL) {
-    cnt += read_cnt(b);
-    b = block_next(b);
-  }
-  return cnt;
+unsigned int fs_device_read() {
+  return read_cnt(fs_device);
 }
 
-unsigned int total_block_write() {
-  unsigned int cnt = 0;
-  struct block* b = block_first();
-  while (b != NULL) {
-    cnt += write_cnt(b);
-    b = block_next(b);
-  }
-  return cnt;
+unsigned int fs_device_write() {
+  return write_cnt(fs_device);
 }
 
 /* Initializes the file system module.

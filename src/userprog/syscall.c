@@ -14,7 +14,7 @@
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 #include "lib/float.h"
-#include "filesys/inode.h"
+#include "filesys/cache.h"
 
 static void syscall_handler(struct intr_frame*);
 
@@ -396,6 +396,14 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
     case SYS_CACHE_RESET:
       cache_reset();
+      break;
+
+    case SYS_BLOCK_READ:
+      f->eax = fs_device_read();
+      break;
+
+    case SYS_BLOCK_WRITE:
+      f->eax = fs_device_write();
       break;
     
     default:
