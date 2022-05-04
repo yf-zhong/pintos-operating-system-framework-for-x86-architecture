@@ -207,25 +207,26 @@ int get_cache_miss_cnt() {
 static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
   ASSERT(inode != NULL);
   size_t sector_num = bytes_to_sectors(pos);
-  struct cache_block* b = find_block_and_acq_lock(inode->sector, true);
-  struct inode_disk* inode_content = (struct inode_disk*) b->content;
-  rw_lock_release(&b->lock, true);
+  struct inode_disk* inode_content = NULL;
+  cache_read((void*)inode_content, inode->sector);
+
   if (sector_num <= 12) {
     return inode_content->direct[sector_num - 1];
-  } else if (sector_num <= 128 + 12) {
+  } else if (sector_num <= 140) {
     sector_num -= 12;
-    b = find_block_and_acq_lock(inode->sector, true);
-    block_sector_t* indir_content = (block_sector_t*) b->content;
-    rw_lock_release(&b->lock, true);
+    block_sector_t indir_content[128];
+    cache_read((void*)indir_content, inode_content->indirect);
     return indir_content[sector_num - 1];
   } else {
-    sector_num -= 128 + 12;
-    b = find_block_and_acq_lock(inode_content->indirect_double, true);
-    block_sector_t* indir2_content = (block_sector_t*) b->content;
-    rw_lock_release(&b->lock, true);
-    b = find_block_and_acq_lock(indir2_content[sector_num / 128], true);
-    block_sector_t* indir_content = (block_sector_t*) b->content;
-    rw_lock_release(&b->lock, true);
+    sector_num -= 140;
+    // Read first level indirect pointer
+    block_sector_t indir2_content[128];
+    cache_read((void*)indir2_content, inode_content->indirect_double);
+
+    // Read second level indirect pointer
+    block_sector_t indir_content[128];
+    cache_read((void*)indir_content, indir2_content[sector_num / 128]); // Start from 0, no need to + 1
+
     return indir_content[sector_num % 128 - 1];
   }
 }
@@ -296,7 +297,7 @@ bool inode_resize(struct inode_disk* ind_d, off_t size) {
     }
   }
   cache_write((void*)buffer, ind_d->indirect);
-  if (ind_d->indirect_double == 0 && size <= 150 * BLOCK_SECTOR_SIZE) {
+  if (ind_d->indirect_double == 0 && size <= 140 * BLOCK_SECTOR_SIZE) {
     ind_d->length = size;
     return true;
   }
@@ -311,11 +312,11 @@ bool inode_resize(struct inode_disk* ind_d, off_t size) {
     cache_read((void*)buffer1, ind_d->indirect_double);
   }
   for (int i = 0; i < 128; i++) {
-    if (size <= (150 + i) * BLOCK_SECTOR_SIZE && buffer1[i] != 0) {
+    if (size <= (140 + i) * BLOCK_SECTOR_SIZE && buffer1[i] != 0) {
       // Shrink first pointer
       free_map_release(buffer1[i], 1);
       buffer1[i] = 0;
-    } else if (size > (150 + i) * BLOCK_SECTOR_SIZE) {
+    } else if (size > (140 + i) * BLOCK_SECTOR_SIZE) {
       // Grow first pointer
       block_sector_t buffer2[128];
       memset(buffer2, 0, 512);
@@ -325,11 +326,11 @@ bool inode_resize(struct inode_disk* ind_d, off_t size) {
         cache_read((void*)buffer2, buffer1[i]);
       }
       for (int j = 0; j < 128; j++) {
-        if (size <= (150 + i * 128 + j) * BLOCK_SECTOR_SIZE && buffer2[j] != 0) {
+        if (size <= (140 + i * 128 + j) * BLOCK_SECTOR_SIZE && buffer2[j] != 0) {
           // Shrink second pointer
           free_map_release(buffer2[j], 1);
           buffer2[j] = 0;
-        } else if (size > (150 + i * 128 + j) * BLOCK_SECTOR_SIZE && buffer2[j] == 0) {
+        } else if (size > (140 + i * 128 + j) * BLOCK_SECTOR_SIZE && buffer2[j] == 0) {
           // Grow second pointer
           buffer2[j] = *new_block_list[new_list_i++];
         }
@@ -363,7 +364,7 @@ bool inode_create(block_sector_t sector, off_t length) {
     disk_inode->magic = INODE_MAGIC;
 
     if (inode_resize(disk_inode, length)) {
-      block_write(fs_device, sector, disk_inode);
+      cache_write(disk_inode, sector);
       success = true;
     }
     free(disk_inode);
