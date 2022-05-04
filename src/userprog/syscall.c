@@ -1,5 +1,6 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 #include "threads/malloc.h"
 #include <syscall-nr.h>
@@ -14,6 +15,9 @@
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 #include "lib/float.h"
+#include "filesys/directory.h"
+#include "filesys/inode.h"
+#include "filesys/free-map.h"
 
 static void syscall_handler(struct intr_frame*);
 
@@ -107,7 +111,8 @@ void sys_open(struct intr_frame* f, const char* file) {
     sys_exit(f, -1);
   }
   struct process* pcb = thread_current()->pcb;
-  struct file *new_file = filesys_open(file);
+  bool is_dir = false;
+  struct file *new_file = filesys_open(file, &is_dir);
   if (!new_file) {
     f->eax = -1;
     return;
@@ -118,6 +123,7 @@ void sys_open(struct intr_frame* f, const char* file) {
   }
   new_file_descriptor->fd = pcb->cur_fd++;
   new_file_descriptor->file = new_file;
+  new_file_descriptor->is_directory = is_dir;
   list_push_back(&(pcb->file_descriptor_table) ,&(new_file_descriptor->elem));
   f->eax = new_file_descriptor->fd;
   return;
@@ -144,6 +150,10 @@ void sys_read(struct intr_frame* f, int fd, void* buffer, unsigned size) {
   if (!is_valid_addr((uint32_t)buffer)) {
     sys_exit(f, -1);
   }
+  struct file_descriptor *my_file_des = find_file_des(fd);
+  if (!my_file_des || my_file_des->is_directory) {
+    sys_exit(f, -1);
+  }
   off_t number_read = 0;
   if (fd == 0) {
     for (unsigned i = 0; i < size; i++) {
@@ -151,10 +161,6 @@ void sys_read(struct intr_frame* f, int fd, void* buffer, unsigned size) {
     }
     return;
   } else if (fd == 1 || fd < 0) {
-    sys_exit(f, -1);
-  }
-  struct file_descriptor *my_file_des = find_file_des(fd);
-  if (!my_file_des) {
     sys_exit(f, -1);
   }
   number_read = file_read(my_file_des->file, buffer, size);
@@ -167,19 +173,20 @@ void sys_write(struct intr_frame* f, int fd, const void* buffer, unsigned size) 
   if (!is_valid_addr((uint32_t)buffer)) {
     sys_exit(f, -1);
   }
+  struct file_descriptor *my_file_des = find_file_des(fd);
+  if (!my_file_des || my_file_des->is_directory) {
+    sys_exit(f, -1);
+  }
   if (fd == 1) {
     putbuf(buffer, size);
   } else if (fd <= 0) {
     sys_exit(f, -1);
   } else {
     int bytes_read;
-    struct file_descriptor* my_file_des = find_file_des(fd);
-    if (my_file_des) {
-      bytes_read = file_write(my_file_des->file, buffer, size);
-      f->eax = bytes_read;
-      return;
-    }
-    f->eax = -2;
+    bytes_read = file_write(my_file_des->file, buffer, size);
+    f->eax = bytes_read;
+    return;
+    
   }
   return;
 }
@@ -243,6 +250,69 @@ void sys_comp_e(struct intr_frame* f, int num) {
   return;
 }
 
+void sys_chdir(struct intr_frame* f, const char* dir) {
+  struct dir* d = tracing(dir, false);
+  if (d == NULL) {
+    f->eax = false;
+    return;
+  }
+  thread_current()->pcb->cwd = d;
+  f->eax = true;
+}
+
+void sys_mkdir(struct intr_frame* f, const char* dir) {
+  block_sector_t inode_sector = 0;
+  struct dir* d = tracing(dir, true);
+  if (d == NULL) {
+    f->eax = false;
+    return;
+  }
+  char name[NAME_MAX + 1];
+  get_last_name(dir, name);
+  if (free_map_allocate(1, &inode_sector) && dir_create(inode_sector, 2) && dir_add(d, name, inode_sector, true)) {
+    struct dir* new_d = dir_open(inode_open(inode_sector));
+    dir_add(new_d, ".", inode_sector, true);
+    dir_add(new_d, "..", get_inode_sector(d), true);
+    f->eax = true;
+  } else {
+    f->eax = false;
+  }
+}
+
+void sys_readdir(struct intr_frame* f, int fd, char* name) {
+  if (fd < 0) {
+    printf("fd: %d is invalid.", fd);
+    f->eax = -1;
+    return;
+  }
+  struct file_descriptor* my_file_des = find_file_des(fd);
+  if (!my_file_des->is_directory) {
+    f->eax = false;
+    return;
+  }
+  struct inode* inode = file_get_inode(my_file_des->file);
+  struct dir* dir = dir_open(inode);
+  bool result = dir_readdir(dir, name);
+  if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) {
+    result = dir_readdir(dir, name);
+  }
+  f->eax = result;
+}
+
+void sys_isdir(struct intr_frame* f, int fd) {
+  if (fd < 0) {
+    printf("fd: %d is invalid.", fd);
+    f->eax = -1;
+    return;
+  }
+  struct file_descriptor* my_file_des = find_file_des(fd);
+  if (!my_file_des->is_directory) {
+    f->eax = false;
+  } else {
+    f->eax = true;
+  }
+}
+
 static void syscall_handler(struct intr_frame* f UNUSED) {
   uint32_t* args = ((uint32_t*)f->esp);
 
@@ -266,6 +336,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       break;
     case SYS_CREATE:
     case SYS_SEEK:
+    case SYS_READDIR:
       num_args = 2;
       break;
     case SYS_PRACTICE:
@@ -278,6 +349,9 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     case SYS_FILESIZE:
     case SYS_TELL:
     case SYS_CLOSE:
+    case SYS_CHDIR:
+    case SYS_MKDIR:
+    case SYS_ISDIR:
       num_args = 1;
       break;
     default:
@@ -355,6 +429,29 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     /* FPU ops */
     case SYS_COMPUTE_E:
       sys_comp_e(f, args[1]);
+      break;
+
+    /* Subdirectories */
+    case SYS_CHDIR:
+      if ((sizeof(char*) - 1) & (unsigned long) &args[1]) {
+        sys_exit(f, -1);
+      }
+      sys_chdir(f, (const char*) args[1]);
+      break;
+    case SYS_MKDIR:
+      if ((sizeof(char*) - 1) & (unsigned long) &args[1]) {
+        sys_exit(f, -1);
+      }
+      sys_mkdir(f, (const char*) args[1]);
+      break;
+    case SYS_READDIR:
+      if ((sizeof(char*) - 1) & (unsigned long) &args[2]) {
+        sys_exit(f, -1);
+      }
+      sys_readdir(f, args[1], (char*) args[2]);
+      break;
+    case SYS_ISDIR:
+      sys_isdir(f, args[1]);
       break;
     
     default:

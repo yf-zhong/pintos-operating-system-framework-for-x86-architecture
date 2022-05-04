@@ -2,8 +2,17 @@
 #define FILESYS_FILE_H
 
 #include "filesys/off_t.h"
+#include <list.h>
 
 struct inode;
+
+/* One element in the file descriptor table */
+struct file_descriptor {
+   int fd;                   /* File descriptor */
+   struct file* file;        /* File description */
+   struct list_elem elem;
+   bool is_directory;        /* file or directory (for proj3 task3) */
+};
 
 /* Opening and closing files. */
 struct file* file_open(struct inode*);
