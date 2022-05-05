@@ -252,14 +252,23 @@ void inode_init(void) {
 /* Call resize in inode_write and inode_create */
 bool inode_resize(struct inode_disk* ind_d, off_t size) {
   // Get block number including all internal and root block
+  off_t old_size = ind_d->length;
+  ind_d->length = size;
+
   size_t num_block_old = bytes_to_blocks(ind_d->length);
   size_t num_block_new = bytes_to_blocks(size);
   bool success = true;
 
   size_t new_alloc_num = (num_block_new - num_block_old) > 0 ? (num_block_new - num_block_old) : 0;
-  block_sector_t new_block_list[new_alloc_num];
+  block_sector_t* new_block_list = malloc(new_alloc_num * sizeof(size_t));
+  if (new_block_list == NULL) {
+    ind_d->length = old_size;
+    return false;
+  }
   success = free_map_allocate_non_consecutive(new_alloc_num, new_block_list);
   if (!success) {
+    free(new_block_list);
+    ind_d->length = old_size;
     return false;
   }
 
@@ -279,11 +288,17 @@ bool inode_resize(struct inode_disk* ind_d, off_t size) {
   }
   if (ind_d->indirect == 0 && size <= 12 * BLOCK_SECTOR_SIZE) {
     ind_d->length = size;
+    free(new_block_list);
     return true;
   }
 
   // Handle indirect pointer, hit only if indir ptr is needed
-  block_sector_t buffer[128];
+  block_sector_t* buffer = malloc(128 * sizeof(block_sector_t));
+  if (buffer == NULL) {
+    free(new_block_list);
+    ind_d->length = old_size;
+    return false;
+  }
   memset(buffer, 0, 512);
   // Create indirect pointer if not exist, read from disk otherwise
   if (ind_d->indirect == 0) {
@@ -304,11 +319,18 @@ bool inode_resize(struct inode_disk* ind_d, off_t size) {
   cache_write((void*)buffer, ind_d->indirect);
   if (ind_d->indirect_double == 0 && size <= 140 * BLOCK_SECTOR_SIZE) {
     ind_d->length = size;
+    free(new_block_list);
     return true;
   }
 
   // Handle doubly indirect pointer, hit only if db indir ptr is needed
-  block_sector_t buffer1[128];
+  block_sector_t* buffer1 = malloc(128 * sizeof(block_sector_t));
+  if (buffer1 == NULL) {
+    free(buffer);
+    free(new_block_list);
+    ind_d->length = old_size;
+    return false;
+  }
   memset(buffer1, 0, 512);
   // Load doubly indirect pointer into buffer
   if (ind_d->indirect_double == 0) {
@@ -323,7 +345,14 @@ bool inode_resize(struct inode_disk* ind_d, off_t size) {
       buffer1[i] = 0;
     } else if (size > (140 + i) * BLOCK_SECTOR_SIZE) {
       // Grow first pointer
-      block_sector_t buffer2[128];
+      block_sector_t* buffer2 = malloc(128 * sizeof(block_sector_t));
+      if (buffer2 == NULL) {
+        free(buffer1);
+        free(buffer);
+        free(new_block_list);
+        ind_d->length = old_size;
+        return false;
+      }
       memset(buffer2, 0, 512);
       if (buffer1[i] == 0) {
         buffer1[i] = new_block_list[new_list_i++];
@@ -341,10 +370,14 @@ bool inode_resize(struct inode_disk* ind_d, off_t size) {
         }
       }
       cache_write((void*)buffer2, buffer1[i]);
+      free(buffer2);
     }
   }
   cache_write((void*)buffer1, ind_d->indirect_double);
   ind_d->length = size;
+  free(buffer1);
+  free(buffer);
+  free(new_block_list);
   return true;
 }
 
@@ -524,7 +557,7 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
   uint8_t* bounce = NULL;
 
   lock_acquire(&inode->inode_lock);
-  if (inode->deny_write_cnt)
+  if (inode->deny_write_cnt) 
     return 0;
 
   // Resize inode if necessary
