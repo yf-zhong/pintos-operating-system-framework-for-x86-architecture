@@ -280,6 +280,11 @@ void inode_init(void) {
   lock_init(&inode_list_lock);
 }
 
+void fill_sector_with_zeros(block_sector_t bst) {
+  static char zeros[BLOCK_SECTOR_SIZE];
+  cache_write(zeros, bst);
+}
+
 /* Call resize in inode_write and inode_create */
 bool inode_resize(struct inode_disk* ind_d, off_t size) {
   // Get block number including all internal and root block
@@ -289,16 +294,28 @@ bool inode_resize(struct inode_disk* ind_d, off_t size) {
   size_t num_block_old = bytes_to_blocks(old_size);
   size_t num_block_new = bytes_to_blocks(size);
 
+  // no resize needed
+  if (num_block_old == num_block_new) {
+    return true;
+  }
+
   size_t new_alloc_num = (num_block_new - num_block_old) > 0 ? (num_block_new - num_block_old) : 0;
+  // list for storing allocated sector number
   block_sector_t* new_block_list = malloc(new_alloc_num * sizeof(block_sector_t));
   if (new_block_list == NULL) {
     ind_d->length = old_size;
     return false;
   }
+  // if allocate not success
   if (!free_map_allocate_non_consecutive(new_alloc_num, new_block_list)) {
     free(new_block_list);
     ind_d->length = old_size;
     return false;
+  }
+
+  // fill all new allocated sectors with zeros
+  for (int i = 0; i < new_alloc_num; i++) {
+    fill_sector_with_zeros(new_block_list[i]);
   }
 
   int new_list_i = 0;
@@ -311,6 +328,7 @@ bool inode_resize(struct inode_disk* ind_d, off_t size) {
     } else if (size > BLOCK_SECTOR_SIZE * i && ind_d->direct[i] == 0) {
       // Grow
       ind_d->direct[i] = new_block_list[new_list_i++];
+      // fill the new allocated sector with zero
       static char zeros[BLOCK_SECTOR_SIZE];
       cache_write(zeros, ind_d->direct[i]);
     }
@@ -655,7 +673,7 @@ void inode_deny_write(struct inode* inode) {
   lock_acquire(&inode->inode_lock);
   inode->deny_write_cnt++;
   ASSERT(inode->deny_write_cnt <= inode->open_cnt);
-  lock_acquire(&inode->inode_lock);
+  lock_release(&inode->inode_lock);
 }
 
 /* Re-enables writes to INODE.
