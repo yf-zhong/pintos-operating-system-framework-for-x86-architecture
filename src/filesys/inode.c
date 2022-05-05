@@ -655,7 +655,7 @@ void inode_deny_write(struct inode* inode) {
   lock_acquire(&inode->inode_lock);
   inode->deny_write_cnt++;
   ASSERT(inode->deny_write_cnt <= inode->open_cnt);
-  lock_acquire(&inode->inode_lock);
+  lock_release(&inode->inode_lock);
 }
 
 /* Re-enables writes to INODE.
