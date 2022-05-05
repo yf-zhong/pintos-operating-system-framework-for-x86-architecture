@@ -523,7 +523,6 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
   off_t bytes_written = 0;
   uint8_t* bounce = NULL;
 
-  lock_acquire(&inode->inode_lock);
   if (inode->deny_write_cnt)
     return 0;
 
@@ -533,11 +532,18 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
   if (ind_d == NULL) {
     return 0;
   }
+
+  lock_acquire(&inode->inode_lock);
   cache_read(ind_d, inode->sector);
   if (new_length > ind_d->length) {
-    inode_resize(ind_d, new_length);
+    if (!inode_resize(ind_d, new_length)) {
+      lock_release(&inode->inode_lock);
+      free(ind_d);
+      return 0;
+    }
   }
   cache_write(ind_d, inode->sector);
+  lock_release(&inode->inode_lock);
 
   while (size > 0) {
     /* Sector to write, starting byte offset within sector. */
