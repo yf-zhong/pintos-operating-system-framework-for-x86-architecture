@@ -40,7 +40,7 @@ static size_t bytes_to_blocks(off_t size) {
     data_num += INDIR_NUM;
   }
   if (data_num > MAX_WITHOUT_D_INDIR) {
-    data_num += DIV_ROUND_UP(data_num - MAX_WITHOUT_D_INDIR, INUMBER_PER_BLOCK);
+    data_num += DIV_ROUND_UP(data_num - MAX_WITHOUT_D_INDIR, INUMBER_PER_BLOCK) + D_INDIR_NUM + 1;
   }
   return data_num;
 }
