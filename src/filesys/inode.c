@@ -238,7 +238,7 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
     }
     cache_read((void*)indir_content, inode_content->indirect);
     block_sector_t result = indir_content[sector_num - 1];
-    free(inode_content);
+    free(indir_content);
     free(inode_content);
     if (result == 0) {
       return -1;
