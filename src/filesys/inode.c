@@ -16,6 +16,7 @@
 #define D_INDIR_NUM 1
 #define MAX_WITHOUT_D_INDIR (INUMBER_PER_BLOCK + DIR_NUM)
 
+void fill_sector_with_zeros(block_sector_t);
 /* On-disk inode.
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
 struct inode_disk {
@@ -255,7 +256,7 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
     block_sector_t* indir2_content = calloc(BLOCK_SECTOR_SIZE, 1);
     cache_read((void*)indir2_content, indir_content[sector_num / INUMBER_PER_BLOCK]); // Start from 0, no need to + 1
     
-    block_sector_t result = indir_content[sector_num % INUMBER_PER_BLOCK - 1];
+    block_sector_t result = indir2_content[sector_num % INUMBER_PER_BLOCK - 1];
     free(inode_content);
     free(indir_content);
     free(indir2_content);
@@ -314,7 +315,7 @@ bool inode_resize(struct inode_disk* ind_d, off_t size) {
   }
 
   // fill all new allocated sectors with zeros
-  for (int i = 0; i < new_alloc_num; i++) {
+  for (size_t i = 0; i < new_alloc_num; i++) {
     fill_sector_with_zeros(new_block_list[i]);
   }
 
