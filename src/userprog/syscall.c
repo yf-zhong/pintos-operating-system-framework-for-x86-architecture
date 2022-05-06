@@ -296,7 +296,7 @@ void sys_readdir(struct intr_frame* f, int fd, char* name) {
   struct inode* inode = file_get_inode(my_file_des->file);
   struct dir* dir = dir_open(inode);
   bool result = dir_readdir(dir, name);
-  if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) {
+  while (result && (strcmp(name, ".") == 0 || strcmp(name, "..") == 0)) {
     result = dir_readdir(dir, name);
   }
   dir_close(dir);

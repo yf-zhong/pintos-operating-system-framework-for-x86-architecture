@@ -66,14 +66,14 @@ struct file* filesys_open(const char* name, bool* is_dir) {
   if (d == NULL) {
     return NULL;
   }
-  char last_name[NAME_MAX + 1];
-  get_last_name(name, last_name);
-  struct inode* inode = dir_get_inode(d);
   if (is_dir != NULL) {
     struct dir* pd = tracing(name, true);
+    char last_name[NAME_MAX + 1];
+    get_last_name(name, last_name);
     *is_dir = check_is_dir(pd, last_name);
     dir_close(pd);
   }
+  struct inode* inode = dir_get_inode(d);
   return file_open(inode);
 }
 
