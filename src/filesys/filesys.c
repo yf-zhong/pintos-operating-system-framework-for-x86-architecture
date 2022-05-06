@@ -6,6 +6,8 @@
 #include "filesys/free-map.h"
 #include "filesys/inode.h"
 #include "filesys/directory.h"
+#include "threads/thread.h"
+#include "userprog/process.h"
 
 /* Partition that contains the file system. */
 struct block* fs_device;
@@ -26,6 +28,7 @@ void filesys_init(bool format) {
     do_format();
 
   free_map_open();
+  thread_current()->pcb->cwd = dir_open_root();
 }
 
 /* Shuts down the file system module, writing any unwritten data
@@ -63,11 +66,14 @@ struct file* filesys_open(const char* name, bool* is_dir) {
   if (d == NULL) {
     return NULL;
   }
-  if (is_dir != NULL) {
-    *is_dir = check_is_dir(d);
-  }
+  char last_name[NAME_MAX + 1];
+  get_last_name(name, last_name);
   struct inode* inode = dir_get_inode(d);
-
+  if (is_dir != NULL) {
+    struct dir* pd = tracing(name, true);
+    *is_dir = check_is_dir(pd, last_name);
+    dir_close(pd);
+  }
   return file_open(inode);
 }
 
@@ -83,13 +89,16 @@ bool filesys_remove(const char* name) {
   char last_name[NAME_MAX + 1];
   get_last_name(name, last_name);
   if (strcmp(last_name, ".") == 0 || strcmp(last_name, "..") == 0) {
+    dir_close(d);
     return false;
   }
   struct inode* inode = dir_get_inode(d);
+  struct dir* parent_dir = tracing(name, true);
 
-  if (check_is_dir(d)) {
+  if (check_is_dir(parent_dir, last_name)) {
     if (get_open_cnt(inode) > 0) {
       dir_close(d);
+      dir_close(parent_dir);
       return false;
     }
     int count = 0;
@@ -99,11 +108,11 @@ bool filesys_remove(const char* name) {
     }
     if (count != 2) {
       dir_close(d);
+      dir_close(parent_dir);
       return false;
     }
   }
   
-  struct dir* parent_dir = tracing(name, true);
   bool result = dir_remove(parent_dir, last_name);
   dir_close(d);
   dir_close(parent_dir);

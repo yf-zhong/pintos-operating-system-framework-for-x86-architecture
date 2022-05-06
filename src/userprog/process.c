@@ -48,7 +48,7 @@ void userprog_init(void) {
   success = t->pcb != NULL;
   /* Kill the kernel if we did not succeed */
   ASSERT(success);
-  t->pcb->cwd = dir_open_root();
+  t->pcb->cwd = NULL;
 }
 
 CHILD* new_child() {
@@ -278,6 +278,7 @@ void decrement_children_ref_cnt(struct process* pcb) {
 }
 
 void exit_setup(struct process* pcb_to_free) {
+  dir_close(pcb_to_free->cwd);
   pcb_to_free->curr_as_child->is_exited = true;
   decrement_children_ref_cnt(pcb_to_free);
   decrement_ref_cnt(pcb_to_free->curr_as_child);
@@ -346,7 +347,6 @@ void process_exit(void) {
   }
 
   printf("%s: exit(%d)\n", pcb_to_free->process_name, pcb_to_free->curr_as_child->exit_status);
-
   cur->pcb = NULL;
   exit_setup(pcb_to_free);
   free(pcb_to_free);

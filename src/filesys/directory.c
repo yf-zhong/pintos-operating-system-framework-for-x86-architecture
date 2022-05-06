@@ -30,39 +30,65 @@ struct dir* tracing(const char* path, bool is_md) {
   struct dir* root = dir_open_root();
   struct dir* cwd = thread_current()->pcb->cwd;
   char curr[NAME_MAX + 1];
-  struct inode* last_inode = NULL;
+  struct dir* curr_dir = NULL;
+  struct dir* last_dir = NULL;
   struct inode* curr_inode = NULL;
 
   if (get_next_part(curr, &path) > 0) {
     if (dir_lookup(root, curr, &curr_inode) || dir_lookup(cwd, curr, &curr_inode)) {
-      struct dir* next_dir = dir_open(curr_inode);
+      curr_dir = dir_open(curr_inode);
       int result = get_next_part(curr, &path);
       while (result > 0) {
-        last_inode = curr_inode;
-        if (dir_lookup(next_dir, curr, &curr_inode)) {
-          next_dir = dir_open(curr_inode);
+        struct dir* dir_to_close = last_dir;
+        last_dir = curr_dir;
+        dir_close(dir_to_close);
+        if (dir_lookup(curr_dir, curr, &curr_inode)) {
+          curr_dir = dir_open(curr_inode);
           result = get_next_part(curr, &path);
         } else {
-          result = 0;
+          result = -2;
         }
       }
-      if (result != 0) {
-        inode_close(last_inode);
-        inode_close(curr_inode);
+      if (result == -1) {
+        dir_close(last_dir);
+        dir_close(curr_dir);
         return NULL;
+      } else if (result == -2) {
+        if (get_next_part(curr, &path) == 0) {
+          if (is_md) {
+            return last_dir;
+          } else {
+            dir_close(last_dir);
+            dir_close(curr_dir);
+            return NULL;
+          }
+        } else {
+          dir_close(last_dir);
+          dir_close(curr_dir);
+          return NULL;
+        }
       }
       struct dir* d;
       if (is_md) {
-        d = dir_open(last_inode);
+        if (last_dir) {
+          d = last_dir;
+          dir_close(curr_dir);
+        } else {
+          d = root;
+          dir_close(curr_dir);
+        }
       } else {
-        d = dir_open(curr_inode);
+        d = curr_dir;
+        dir_close(last_dir);
       }
-      inode_close(last_inode);
-      inode_close(curr_inode);
       return d;
     } else {
-      if (is_md) {
-        return thread_current()->pcb->cwd;
+      if (get_next_part(curr, &path) == 0) {
+        if (is_md) {
+          return thread_current()->pcb->cwd;
+        } else {
+          return NULL;
+        }
       } else {
         return NULL;
       }
@@ -77,11 +103,11 @@ block_sector_t get_inode_sector(struct dir* de) {
   return get_bst(de->inode);
 }
 
-bool check_is_dir(struct dir* dir) {
+bool check_is_dir(struct dir* parent_dir, char name[NAME_MAX + 1]) {
   struct dir_entry e;
-  while (inode_read_at(dir->inode, &e, sizeof e, dir->pos) == sizeof e) {
-    dir->pos += sizeof e;
-    if (strcmp(e.name, ".") == 0) {
+  while (inode_read_at(parent_dir->inode, &e, sizeof e, parent_dir->pos) == sizeof e) {
+    parent_dir->pos += sizeof e;
+    if (e.in_use && strcmp(e.name, name) == 0) {
       return e.is_directory;
     }
   }

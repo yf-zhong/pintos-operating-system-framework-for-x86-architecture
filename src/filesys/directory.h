@@ -30,7 +30,7 @@ bool dir_readdir(struct dir*, char name[NAME_MAX + 1]);
 /* Helper function for proj3 task3 */
 struct dir* tracing(const char*, bool);
 block_sector_t get_inode_sector(struct dir*);
-bool check_is_dir(struct dir*);
+bool check_is_dir(struct dir*, char name[NAME_MAX + 1]);
 
 void get_last_name(const char* dir, char name[NAME_MAX + 1]);
 

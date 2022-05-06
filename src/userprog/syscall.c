@@ -150,10 +150,6 @@ void sys_read(struct intr_frame* f, int fd, void* buffer, unsigned size) {
   if (!is_valid_addr((uint32_t)buffer)) {
     sys_exit(f, -1);
   }
-  struct file_descriptor *my_file_des = find_file_des(fd);
-  if (!my_file_des || my_file_des->is_directory) {
-    sys_exit(f, -1);
-  }
   off_t number_read = 0;
   if (fd == 0) {
     for (unsigned i = 0; i < size; i++) {
@@ -161,6 +157,10 @@ void sys_read(struct intr_frame* f, int fd, void* buffer, unsigned size) {
     }
     return;
   } else if (fd == 1 || fd < 0) {
+    sys_exit(f, -1);
+  }
+  struct file_descriptor *my_file_des = find_file_des(fd);
+  if (!my_file_des || my_file_des->is_directory) {
     sys_exit(f, -1);
   }
   number_read = file_read(my_file_des->file, buffer, size);
@@ -173,15 +173,15 @@ void sys_write(struct intr_frame* f, int fd, const void* buffer, unsigned size) 
   if (!is_valid_addr((uint32_t)buffer)) {
     sys_exit(f, -1);
   }
-  struct file_descriptor *my_file_des = find_file_des(fd);
-  if (!my_file_des || my_file_des->is_directory) {
-    sys_exit(f, -1);
-  }
   if (fd == 1) {
     putbuf(buffer, size);
   } else if (fd <= 0) {
     sys_exit(f, -1);
   } else {
+    struct file_descriptor *my_file_des = find_file_des(fd);
+    if (!my_file_des || my_file_des->is_directory) {
+      sys_exit(f, -1);
+    }
     int bytes_read;
     bytes_read = file_write(my_file_des->file, buffer, size);
     f->eax = bytes_read;
@@ -273,8 +273,11 @@ void sys_mkdir(struct intr_frame* f, const char* dir) {
     struct dir* new_d = dir_open(inode_open(inode_sector));
     dir_add(new_d, ".", inode_sector, true);
     dir_add(new_d, "..", get_inode_sector(d), true);
+    dir_close(new_d);
+    dir_close(d);
     f->eax = true;
   } else {
+    dir_close(d);
     f->eax = false;
   }
 }
@@ -296,6 +299,7 @@ void sys_readdir(struct intr_frame* f, int fd, char* name) {
   if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) {
     result = dir_readdir(dir, name);
   }
+  dir_close(dir);
   f->eax = result;
 }
 
