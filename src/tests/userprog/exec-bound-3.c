@@ -21,6 +21,6 @@ void test_main(void) {
      of each segment. From that, you'll be able to figure out how to
      modify get_bad_boundary to make things work again. */
 
-  msg("boundary address: 0x%x", p);
+  // msg("boundary address: 0x%x", p);
   fail("should have killed process");
 }
