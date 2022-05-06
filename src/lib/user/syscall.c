@@ -161,10 +161,6 @@ tid_t get_tid(void) { return syscall0(SYS_GET_TID); }
 
 unsigned int cache_hit_cnt(void) {return syscall0(SYS_CACHE_HIT); }
 
-unsigned int cache_miss_cnt(void) {return syscall0(SYS_CACHE_MISS); }
-
 void cache_reset(void) {syscall0(SYS_CACHE_RESET); }
-
-unsigned int fs_device_read(void) {return syscall0(SYS_BLOCK_READ); }
 
 unsigned int fs_device_write(void) {return syscall0(SYS_BLOCK_WRITE); }
