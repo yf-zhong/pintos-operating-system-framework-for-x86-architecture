@@ -54,6 +54,8 @@ tid_t get_tid(void);
 int cache_hit_cnt(void);
 int cache_miss_cnt(void);
 void cache_reset(void);
+unsigned int fs_device_read(void);
+unsigned int fs_device_write(void);
 
 /* Project 3 and optionally project 4. */
 mapid_t mmap(int fd, void* addr);
