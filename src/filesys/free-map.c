@@ -4,13 +4,17 @@
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
+#include "threads/synch.h"
 
 static struct file* free_map_file; /* Free map file. */
 static struct bitmap* free_map;    /* Free map, one bit per sector. */
 
+struct lock free_map_lock;
+
 /* Initializes the free map. */
 void free_map_init(void) {
   free_map = bitmap_create(block_size(fs_device));
+  lock_init(&free_map_lock);
   if (free_map == NULL)
     PANIC("bitmap creation failed--file system device is too large");
   bitmap_mark(free_map, FREE_MAP_SECTOR);
@@ -23,7 +27,9 @@ void free_map_init(void) {
    sectors were available or if the free_map file could not be
    written. */
 bool free_map_allocate(size_t cnt, block_sector_t* sectorp) {
+  lock_acquire(&free_map_lock);
   block_sector_t sector = bitmap_scan_and_flip(free_map, 0, cnt, false);
+  lock_release(&free_map_lock);
   if (sector != BITMAP_ERROR && free_map_file != NULL && !bitmap_write(free_map, free_map_file)) {
     bitmap_set_multiple(free_map, sector, cnt, false);
     sector = BITMAP_ERROR;
@@ -31,6 +37,22 @@ bool free_map_allocate(size_t cnt, block_sector_t* sectorp) {
   if (sector != BITMAP_ERROR)
     *sectorp = sector;
   return sector != BITMAP_ERROR;
+}
+
+/* Allocates cnt non-consecutive sectors from the free map and stores them into sectorpp */
+bool free_map_allocate_non_consecutive(size_t cnt, block_sector_t* sectorp) {
+  bool success = true;
+  for (size_t i = 0; i < cnt; i++) {
+    success = free_map_allocate(1, &sectorp[i]);
+    if (!success) {
+      // If any allocation fail, release all previous allocated blocks
+      for (size_t j = 0; j < i; j++) {
+        free_map_release(sectorp[j], 1);
+      }
+      return false;
+    }
+  }
+  return success;
 }
 
 /* Makes CNT sectors starting at SECTOR available for use. */
