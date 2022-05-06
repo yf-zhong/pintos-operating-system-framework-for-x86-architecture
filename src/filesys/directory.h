@@ -28,6 +28,7 @@ bool dir_remove(struct dir*, const char* name);
 bool dir_readdir(struct dir*, char name[NAME_MAX + 1]);
 
 /* Helper function for proj3 task3 */
+struct inode* get_inode(struct dir*);
 struct dir* tracing(const char*, bool);
 block_sector_t get_inode_sector(struct dir*);
 bool check_is_dir(struct dir*, char name[NAME_MAX + 1]);

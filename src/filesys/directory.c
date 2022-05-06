@@ -24,6 +24,10 @@ struct dir_entry {
 
 static int get_next_part(char part[NAME_MAX + 1], const char** srcp);
 
+struct inode* get_inode(struct dir* dir) {
+  return dir->inode;
+}
+
 /* parsing the path and trace the directory until no more path string or error occurs. 
 Mainly used in mkdir and chdir */
 struct dir* tracing(const char* path, bool is_md) {
@@ -50,6 +54,7 @@ struct dir* tracing(const char* path, bool is_md) {
         }
       }
       if (result == -1) {
+        dir_close(root);
         dir_close(last_dir);
         dir_close(curr_dir);
         return NULL;
@@ -58,11 +63,13 @@ struct dir* tracing(const char* path, bool is_md) {
           if (is_md) {
             return last_dir;
           } else {
+            dir_close(root);
             dir_close(last_dir);
             dir_close(curr_dir);
             return NULL;
           }
         } else {
+          dir_close(root);
           dir_close(last_dir);
           dir_close(curr_dir);
           return NULL;
@@ -85,15 +92,19 @@ struct dir* tracing(const char* path, bool is_md) {
     } else {
       if (get_next_part(curr, &path) == 0) {
         if (is_md) {
-          return thread_current()->pcb->cwd;
+          dir_close(root);
+          return dir_reopen(cwd);
         } else {
+          dir_close(root);
           return NULL;
         }
       } else {
+        dir_close(root);
         return NULL;
       }
     }
   } else {
+    dir_close(root);
     return NULL;
   }
 }

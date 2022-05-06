@@ -153,7 +153,7 @@ static void start_process(void* spaptr_) {
     // Ensure that timer_interrupt() -> schedule() -> process_activate()
     // does not try to activate our uninitialized pagedir
     t_pcb_init(t, new_pcb, new_c);
-    t->pcb->cwd = spaptr->cwd;
+    t->pcb->cwd = dir_reopen(spaptr->cwd);
   }
  
   /* Initialize interrupt frame and load executable. */
