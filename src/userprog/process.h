@@ -48,13 +48,7 @@ struct process {
   struct file* curr_executable;
   int cur_fd;                 /* The fd number assigned to new file */
   struct list file_descriptor_table; /* All the files opened in current process */
-};
-
-/* One element in the file descriptor table */
-struct file_descriptor {
-   int fd;                   /* File descriptor */
-   struct file *file;        /* File description */
-   struct list_elem elem;
+  struct dir* cwd;       /* current working directory of the process */
 };
 
 // NEW_c has to come first so that 
@@ -62,6 +56,7 @@ struct file_descriptor {
 typedef struct start_proc_arg {
   struct child* new_c;
   char* file_name;
+  struct dir* cwd;      /* current working directory of the process */
 } SPA;
 
 void userprog_init(void);

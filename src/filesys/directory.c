@@ -1,10 +1,12 @@
 #include "filesys/directory.h"
 #include <stdio.h>
-#include <string.h>
+#include "lib/string.h"
 #include <list.h>
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
 #include "threads/malloc.h"
+#include "threads/thread.h"
+#include "userprog/process.h"
 
 /* A directory. */
 struct dir {
@@ -17,7 +19,147 @@ struct dir_entry {
   block_sector_t inode_sector; /* Sector number of header. */
   char name[NAME_MAX + 1];     /* Null terminated file name. */
   bool in_use;                 /* In use or free? */
+  bool is_directory;           /* Is directory or file? (For proj3 task3) */
 };
+
+static int get_next_part(char part[NAME_MAX + 1], const char** srcp);
+
+struct inode* get_inode(struct dir* dir) {
+  return dir->inode;
+}
+
+/* parsing the path and trace the directory until no more path string or error occurs. 
+Mainly used in mkdir and chdir */
+struct dir* tracing(const char* path, bool is_md) {
+  struct dir* root = dir_open_root();
+  struct dir* cwd = thread_current()->pcb->cwd;
+  char curr[NAME_MAX + 1];
+  struct dir* curr_dir = NULL;
+  struct dir* last_dir = NULL;
+  struct inode* curr_inode = NULL;
+
+  if (get_next_part(curr, &path) > 0) {
+    if (dir_lookup(root, curr, &curr_inode) || dir_lookup(cwd, curr, &curr_inode)) {
+      curr_dir = dir_open(curr_inode);
+      int result = get_next_part(curr, &path);
+      while (result > 0) {
+        struct dir* dir_to_close = last_dir;
+        last_dir = curr_dir;
+        dir_close(dir_to_close);
+        if (dir_lookup(curr_dir, curr, &curr_inode)) {
+          curr_dir = dir_open(curr_inode);
+          result = get_next_part(curr, &path);
+        } else {
+          result = -2;
+        }
+      }
+      if (result == -1) {
+        dir_close(root);
+        dir_close(last_dir);
+        dir_close(curr_dir);
+        return NULL;
+      } else if (result == -2) {
+        if (get_next_part(curr, &path) == 0) {
+          if (is_md) {
+            return last_dir;
+          } else {
+            dir_close(root);
+            dir_close(last_dir);
+            dir_close(curr_dir);
+            return NULL;
+          }
+        } else {
+          dir_close(root);
+          dir_close(last_dir);
+          dir_close(curr_dir);
+          return NULL;
+        }
+      }
+      struct dir* d;
+      if (is_md) {
+        if (last_dir) {
+          d = last_dir;
+          dir_close(curr_dir);
+        } else {
+          d = root;
+          dir_close(curr_dir);
+        }
+      } else {
+        d = curr_dir;
+        dir_close(last_dir);
+      }
+      return d;
+    } else {
+      if (get_next_part(curr, &path) == 0) {
+        if (is_md) {
+          dir_close(root);
+          return dir_reopen(cwd);
+        } else {
+          dir_close(root);
+          return NULL;
+        }
+      } else {
+        dir_close(root);
+        return NULL;
+      }
+    }
+  } else {
+    dir_close(root);
+    return NULL;
+  }
+}
+
+/* Getter for inode_sector */
+block_sector_t get_inode_sector(struct dir* de) {
+  return get_bst(de->inode);
+}
+
+bool check_is_dir(struct dir* parent_dir, char name[NAME_MAX + 1]) {
+  struct dir_entry e;
+  while (inode_read_at(parent_dir->inode, &e, sizeof e, parent_dir->pos) == sizeof e) {
+    parent_dir->pos += sizeof e;
+    if (e.in_use && strcmp(e.name, name) == 0) {
+      return e.is_directory;
+    }
+  }
+  return false;
+}
+
+/* Helper provided in spec for parsing path */
+/* Extracts a file name part from *SRCP into PART, and updates *SRCP 
+   so that the next call will return the next file name part. 
+   Returns 1 if successful, 0 at end of string, -1 for a too-long file name part. */
+static int get_next_part(char part[NAME_MAX + 1], const char** srcp) {
+  const char* src = *srcp;
+  char* dst = part;
+  /* Skip leading slashes. If it's all slashes, we're done. */
+  while (*src == '/') {
+    src++;
+  }
+  if (*src == '\0') {
+    return 0;
+  }
+  /* Copy up to NAME_MAX character from SRC to DST. Add null terminator. */
+  while (*src != '/' && *src != '\0') {
+    if (dst < part + NAME_MAX) {
+      *dst++ = *src;
+    } else {
+      return -1;
+    }
+    src++;
+  }
+  *dst = '\0';
+  /* Advance source pointer. */
+  *srcp = src;
+  return 1;
+}
+
+void get_last_name(const char* dir, char name[NAME_MAX + 1]) {
+  char last[NAME_MAX + 1];
+  while (get_next_part(last, &dir) != 0) {
+    strlcpy(name, last, NAME_MAX + 1);
+  }
+}
 
 /* Creates a directory with space for ENTRY_CNT entries in the
    given SECTOR.  Returns true if successful, false on failure. */
@@ -112,7 +254,7 @@ bool dir_lookup(const struct dir* dir, const char* name, struct inode** inode) {
    Returns true if successful, false on failure.
    Fails if NAME is invalid (i.e. too long) or a disk or memory
    error occurs. */
-bool dir_add(struct dir* dir, const char* name, block_sector_t inode_sector) {
+bool dir_add(struct dir* dir, const char* name, block_sector_t inode_sector, bool is_dir) {
   struct dir_entry e;
   off_t ofs;
   bool success = false;
@@ -143,6 +285,7 @@ bool dir_add(struct dir* dir, const char* name, block_sector_t inode_sector) {
   e.in_use = true;
   strlcpy(e.name, name, sizeof e.name);
   e.inode_sector = inode_sector;
+  e.is_directory = is_dir;
   success = inode_write_at(dir->inode, &e, sizeof e, ofs) == sizeof e;
 
 done:

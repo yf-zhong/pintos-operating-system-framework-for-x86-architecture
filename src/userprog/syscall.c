@@ -1,5 +1,6 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 #include "threads/malloc.h"
 #include <syscall-nr.h>
@@ -15,6 +16,9 @@
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
 #include "lib/float.h"
+#include "filesys/directory.h"
+#include "filesys/inode.h"
+#include "filesys/free-map.h"
 #include "filesys/cache.h"
 
 static void syscall_handler(struct intr_frame*);
@@ -67,7 +71,6 @@ bool is_valid_str(const char* c) {
 
 void syscall_init(void) {
   intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
-  lock_init(&file_sys_lock); /* Init the lock for file syscall */
 }
 
 void sys_practice(struct intr_frame* f, int i) {
@@ -107,11 +110,7 @@ void sys_create(struct intr_frame* f, const char* file, unsigned initial_size) {
   }
   /* Get current user program pcb */
   bool flag;
-  /* Lock required */
-  lock_acquire(&file_sys_lock);
   flag = filesys_create(file, initial_size);
-  /* Lock release required */
-  lock_release(&file_sys_lock);
   f->eax = flag;
   return;
 }
@@ -121,9 +120,7 @@ void sys_remove(struct intr_frame* f, const char* file) {
     sys_exit(f, -1);
   }
   bool flag;
-  lock_acquire(&file_sys_lock);
   flag = filesys_remove(file);
-  lock_release(&file_sys_lock);
   f->eax = flag;
   return;
 }
@@ -133,9 +130,8 @@ void sys_open(struct intr_frame* f, const char* file) {
     sys_exit(f, -1);
   }
   struct process* pcb = thread_current()->pcb;
-  lock_acquire(&file_sys_lock);
-  struct file *new_file = filesys_open(file);
-  lock_release(&file_sys_lock);
+  bool is_dir = false;
+  struct file *new_file = filesys_open(file, &is_dir);
   if (!new_file) {
     f->eax = -1;
     return;
@@ -146,6 +142,7 @@ void sys_open(struct intr_frame* f, const char* file) {
   }
   new_file_descriptor->fd = pcb->cur_fd++;
   new_file_descriptor->file = new_file;
+  new_file_descriptor->is_directory = is_dir;
   list_push_back(&(pcb->file_descriptor_table) ,&(new_file_descriptor->elem));
   f->eax = new_file_descriptor->fd;
   return;
@@ -156,14 +153,11 @@ void sys_filesize(struct intr_frame* f, int fd) {
     sys_exit(f, -1);
   }
   off_t file_size;
-  lock_acquire(&file_sys_lock);
   struct file_descriptor *my_file_des = find_file_des(fd);
   if (!my_file_des) {
-    lock_release(&file_sys_lock);
     sys_exit(f, -1);
   }
   file_size = file_length(my_file_des->file);
-  lock_release(&file_sys_lock);
   f->eax = file_size;
   return;
 }
@@ -184,14 +178,11 @@ void sys_read(struct intr_frame* f, int fd, void* buffer, unsigned size) {
   } else if (fd == 1 || fd < 0) {
     sys_exit(f, -1);
   }
-  lock_acquire(&file_sys_lock);
   struct file_descriptor *my_file_des = find_file_des(fd);
-  if (!my_file_des) {
-    lock_release(&file_sys_lock);
+  if (!my_file_des || my_file_des->is_directory) {
     sys_exit(f, -1);
   }
   number_read = file_read(my_file_des->file, buffer, size);
-  lock_release(&file_sys_lock);
   f->eax = number_read;
   return;
 }
@@ -206,17 +197,15 @@ void sys_write(struct intr_frame* f, int fd, const void* buffer, unsigned size) 
   } else if (fd <= 0) {
     sys_exit(f, -1);
   } else {
-    int bytes_read;
-    lock_acquire(&file_sys_lock);
-    struct file_descriptor* my_file_des = find_file_des(fd);
-    if (my_file_des) {
-      bytes_read = file_write(my_file_des->file, buffer, size);
-      f->eax = bytes_read;
-      lock_release(&file_sys_lock);
-      return;
+    struct file_descriptor *my_file_des = find_file_des(fd);
+    if (!my_file_des || my_file_des->is_directory) {
+      sys_exit(f, -1);
     }
-    f->eax = -2;
-    lock_release(&file_sys_lock);
+    int bytes_read;
+    bytes_read = file_write(my_file_des->file, buffer, size);
+    f->eax = bytes_read;
+    return;
+    
   }
   return;
 }
@@ -227,16 +216,13 @@ void sys_seek(struct intr_frame* f, int fd, unsigned position) {
     f->eax = -1;
     return;
   }
-  lock_acquire(&file_sys_lock);
   struct file_descriptor* my_file_des = find_file_des(fd);
   if (my_file_des) {
     file_seek(my_file_des->file, position);
     f->eax = 0;
-    lock_release(&file_sys_lock);
     return;
   }
   f->eax = -1;
-  lock_release(&file_sys_lock);
   return;
 }
 
@@ -246,15 +232,12 @@ void sys_tell(struct intr_frame* f, int fd) {
     f->eax = -1;
     return;
   }
-  lock_acquire(&file_sys_lock);
   struct file_descriptor* my_file_des = find_file_des(fd);
   if (my_file_des) {
     f->eax = file_tell(my_file_des->file);
-    lock_release(&file_sys_lock);
     return;
   }
   f->eax = -1;
-  lock_release(&file_sys_lock);
   return;
 }
 
@@ -264,18 +247,15 @@ void sys_close(struct intr_frame* f, int fd) {
     f->eax = -1;
     return;
   }
-  lock_acquire(&file_sys_lock);
   struct file_descriptor* my_file_des = find_file_des(fd);
   if (my_file_des) {
     file_close(my_file_des->file);
     f->eax = 0;
     list_remove(&my_file_des->elem);
     free(list_entry(&my_file_des->elem, struct file_descriptor, elem));
-    lock_release(&file_sys_lock);
     return;
   }
   f->eax = -1;
-  lock_release(&file_sys_lock);
   return;
 }
 
@@ -287,6 +267,73 @@ void sys_comp_e(struct intr_frame* f, int num) {
   }
   f->eax = sys_sum_to_e(num);
   return;
+}
+
+void sys_chdir(struct intr_frame* f, const char* dir) {
+  struct dir* d = tracing(dir, false);
+  if (d == NULL) {
+    f->eax = false;
+    return;
+  }
+  thread_current()->pcb->cwd = d;
+  f->eax = true;
+}
+
+void sys_mkdir(struct intr_frame* f, const char* dir) {
+  block_sector_t inode_sector = 0;
+  struct dir* d = tracing(dir, true);
+  if (d == NULL) {
+    f->eax = false;
+    return;
+  }
+  char name[NAME_MAX + 1];
+  get_last_name(dir, name);
+  if (free_map_allocate(1, &inode_sector) && dir_create(inode_sector, 2) && dir_add(d, name, inode_sector, true)) {
+    struct dir* new_d = dir_open(inode_open(inode_sector));
+    dir_add(new_d, ".", inode_sector, true);
+    dir_add(new_d, "..", get_inode_sector(d), true);
+    dir_close(new_d);
+    dir_close(d);
+    f->eax = true;
+  } else {
+    dir_close(d);
+    f->eax = false;
+  }
+}
+
+void sys_readdir(struct intr_frame* f, int fd, char* name) {
+  if (fd < 0) {
+    printf("fd: %d is invalid.", fd);
+    f->eax = -1;
+    return;
+  }
+  struct file_descriptor* my_file_des = find_file_des(fd);
+  if (!my_file_des->is_directory) {
+    f->eax = false;
+    return;
+  }
+  struct inode* inode = file_get_inode(my_file_des->file);
+  struct dir* dir = dir_open(inode);
+  bool result = dir_readdir(dir, name);
+  while (result && (strcmp(name, ".") == 0 || strcmp(name, "..") == 0)) {
+    result = dir_readdir(dir, name);
+  }
+  dir_close(dir);
+  f->eax = result;
+}
+
+void sys_isdir(struct intr_frame* f, int fd) {
+  if (fd < 0) {
+    printf("fd: %d is invalid.", fd);
+    f->eax = -1;
+    return;
+  }
+  struct file_descriptor* my_file_des = find_file_des(fd);
+  if (!my_file_des->is_directory) {
+    f->eax = false;
+  } else {
+    f->eax = true;
+  }
 }
 
 void sys_inumber(struct intr_frame* f, int fd) {
@@ -323,6 +370,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       break;
     case SYS_CREATE:
     case SYS_SEEK:
+    case SYS_READDIR:
       num_args = 2;
       break;
     case SYS_PRACTICE:
@@ -335,6 +383,9 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     case SYS_FILESIZE:
     case SYS_TELL:
     case SYS_CLOSE:
+    case SYS_CHDIR:
+    case SYS_MKDIR:
+    case SYS_ISDIR:
     case SYS_INUMBER:
       num_args = 1;
       break;
@@ -415,6 +466,27 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       sys_comp_e(f, args[1]);
       break;
 
+    /* Subdirectories */
+    case SYS_CHDIR:
+      if ((sizeof(char*) - 1) & (unsigned long) &args[1]) {
+        sys_exit(f, -1);
+      }
+      sys_chdir(f, (const char*) args[1]);
+      break;
+    case SYS_MKDIR:
+      if ((sizeof(char*) - 1) & (unsigned long) &args[1]) {
+        sys_exit(f, -1);
+      }
+      sys_mkdir(f, (const char*) args[1]);
+      break;
+    case SYS_READDIR:
+      if ((sizeof(char*) - 1) & (unsigned long) &args[2]) {
+        sys_exit(f, -1);
+      }
+      sys_readdir(f, args[1], (char*) args[2]);
+      break;
+    case SYS_ISDIR:
+      sys_isdir(f, args[1]);
     /* File system inode */
     case SYS_INUMBER:
       sys_inumber(f, args[1]);

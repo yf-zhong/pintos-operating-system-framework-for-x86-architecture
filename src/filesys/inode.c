@@ -57,6 +57,15 @@ struct inode {
   struct lock inode_lock; /* Lock for each inode struct. */  
 };
 
+/* helper for proj3 task3 */
+int get_open_cnt(struct inode* inode) {
+  return inode->open_cnt;
+}
+
+int get_bst(struct inode* inode) {
+  return inode->sector;
+}
+
 /* Returns the block device sector that contains byte offset POS
    within INODE.
    Returns -1 if INODE does not contain data for a byte at offset

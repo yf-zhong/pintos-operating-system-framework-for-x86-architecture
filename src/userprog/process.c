@@ -46,9 +46,9 @@ void userprog_init(void) {
   t->pcb = calloc(sizeof(struct process), 1);
   t_pcb_init(t, t->pcb, NULL);
   success = t->pcb != NULL;
-
   /* Kill the kernel if we did not succeed */
   ASSERT(success);
+  t->pcb->cwd = NULL;
 }
 
 CHILD* new_child() {
@@ -87,6 +87,7 @@ pid_t process_execute(const char* file_name) {
     return TID_ERROR;
   spaptr->file_name = palloc_get_page(0);
   spaptr->new_c = new_child();
+  spaptr->cwd = thread_current()->pcb->cwd;
   if (spaptr->file_name == NULL || spaptr->new_c == NULL) {
     return TID_ERROR;
   }
@@ -152,6 +153,7 @@ static void start_process(void* spaptr_) {
     // Ensure that timer_interrupt() -> schedule() -> process_activate()
     // does not try to activate our uninitialized pagedir
     t_pcb_init(t, new_pcb, new_c);
+    t->pcb->cwd = dir_reopen(spaptr->cwd);
   }
  
   /* Initialize interrupt frame and load executable. */
@@ -179,7 +181,7 @@ static void start_process(void* spaptr_) {
     // strlcpy(file_name_cpy, file_name, strlen(file_name) + 1);
     // char** saveptr = &file_name_cpy;
     // char* prog_name = strtok_r(file_name_cpy, " ", saveptr);
-    struct file* file = filesys_open(t->pcb->process_name);
+    struct file* file = filesys_open(t->pcb->process_name, NULL);
     t->pcb->curr_executable = file;
     // free(cpy_base);
     file_deny_write(file);
@@ -276,6 +278,7 @@ void decrement_children_ref_cnt(struct process* pcb) {
 }
 
 void exit_setup(struct process* pcb_to_free) {
+  dir_close(pcb_to_free->cwd);
   pcb_to_free->curr_as_child->is_exited = true;
   decrement_children_ref_cnt(pcb_to_free);
   decrement_ref_cnt(pcb_to_free->curr_as_child);
@@ -344,7 +347,6 @@ void process_exit(void) {
   }
 
   printf("%s: exit(%d)\n", pcb_to_free->process_name, pcb_to_free->curr_as_child->exit_status);
-
   cur->pcb = NULL;
   exit_setup(pcb_to_free);
   free(pcb_to_free);
@@ -525,7 +527,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
 
 
   /* Open executable file. */
-  file = filesys_open(t->pcb->process_name);
+  file = filesys_open(t->pcb->process_name, NULL);
 
   if (file == NULL) {
     printf("load: %s: open failed\n", file_name);
