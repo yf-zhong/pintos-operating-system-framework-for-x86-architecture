@@ -14,10 +14,12 @@
 #include "userprog/pagedir.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
+#include "filesys/inode.h"
 #include "lib/float.h"
 #include "filesys/directory.h"
 #include "filesys/inode.h"
 #include "filesys/free-map.h"
+#include "filesys/cache.h"
 
 static void syscall_handler(struct intr_frame*);
 
@@ -28,6 +30,23 @@ void sys_halt(void);
 void sys_exec(struct intr_frame*, const char*);
 void sys_wait(struct intr_frame*, pid_t);
 void sys_exit(struct intr_frame*, int);
+
+/* File operation syscalls */
+void sys_create(struct intr_frame*, const char*, unsigned);
+void sys_remove(struct intr_frame*, const char*);
+void sys_open(struct intr_frame*, const char*);
+void sys_filesize(struct intr_frame*, int);
+void sys_read(struct intr_frame*, int, void*, unsigned);
+void sys_write(struct intr_frame*, int, const void*, unsigned);
+void sys_seek(struct intr_frame*, int, unsigned);
+void sys_tell(struct intr_frame*, int);
+void sys_close(struct intr_frame*, int);
+
+/* FPU ops */
+void sys_comp_e(struct intr_frame*, int);
+
+/* File sytem syscall */
+void sys_inumber(struct intr_frame*, int);
 
 bool is_valid_addr(uint32_t addr) {
   uint32_t* pd = thread_current()->pcb->pagedir;
@@ -317,6 +336,17 @@ void sys_isdir(struct intr_frame* f, int fd) {
   }
 }
 
+void sys_inumber(struct intr_frame* f, int fd) {
+  if (fd < 0) {
+    printf("fd: %d is invalid.", fd);
+    f->eax = -1;
+    return;
+  }
+  struct file_descriptor* cur_file_des = find_file_des(fd);
+  f->eax = file_get_inumber(cur_file_des->file);
+  return;
+}
+
 static void syscall_handler(struct intr_frame* f UNUSED) {
   uint32_t* args = ((uint32_t*)f->esp);
 
@@ -356,6 +386,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     case SYS_CHDIR:
     case SYS_MKDIR:
     case SYS_ISDIR:
+    case SYS_INUMBER:
       num_args = 1;
       break;
     default:
@@ -456,6 +487,29 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       break;
     case SYS_ISDIR:
       sys_isdir(f, args[1]);
+    /* File system inode */
+    case SYS_INUMBER:
+      sys_inumber(f, args[1]);
+      break;
+  
+    case SYS_CACHE_HIT:
+      f->eax = get_cache_hit_cnt();
+      break;
+
+    case SYS_CACHE_MISS:
+      f->eax = get_cache_miss_cnt();
+      break;
+
+    case SYS_CACHE_RESET:
+      cache_reset();
+      break;
+
+    case SYS_BLOCK_READ:
+      f->eax = fs_device_read();
+      break;
+
+    case SYS_BLOCK_WRITE:
+      f->eax = fs_device_write();
       break;
     
     default:
