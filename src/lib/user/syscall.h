@@ -52,10 +52,8 @@ void sema_up(sema_t* sema);
 tid_t get_tid(void);
 
 unsigned int cache_hit_cnt(void);
-unsigned int cache_miss_cnt(void);
 void cache_reset(void);
-unsigned int fs_device_read(void);
-unsigned int fs_device_write(void);
+unsigned int fs_device_write_cnt(void);
 
 /* Project 3 and optionally project 4. */
 mapid_t mmap(int fd, void* addr);

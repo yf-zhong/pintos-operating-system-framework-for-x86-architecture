@@ -41,10 +41,10 @@ void write_file() {
 void test_main(void) {
   CHECK(create(file_name, file_size), "create \"%s\"", file_name);
   cache_reset();
-  int block_write_before = fs_device_write();
+  int block_write_before = fs_device_write_cnt();
   write_file();
   read_file();
-  int block_write_after = fs_device_write();
+  int block_write_after = fs_device_write_cnt();
   ASSERT((64 <= block_write_after - block_write_before) || (block_write_after - block_write_before <= 256));
   CHECK(remove(file_name), "remove \"%s\"", file_name);
   return;

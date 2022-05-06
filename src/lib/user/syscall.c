@@ -163,4 +163,4 @@ unsigned int cache_hit_cnt(void) {return syscall0(SYS_CACHE_HIT); }
 
 void cache_reset(void) {syscall0(SYS_CACHE_RESET); }
 
-unsigned int fs_device_write(void) {return syscall0(SYS_BLOCK_WRITE); }
+unsigned int fs_device_write_cnt(void) {return syscall0(SYS_BLOCK_WRITE); }
