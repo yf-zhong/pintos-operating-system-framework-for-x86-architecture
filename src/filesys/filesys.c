@@ -6,11 +6,20 @@
 #include "filesys/free-map.h"
 #include "filesys/inode.h"
 #include "filesys/directory.h"
+#include "filesys/cache.h"
 
 /* Partition that contains the file system. */
 struct block* fs_device;
 
 static void do_format(void);
+
+unsigned int fs_device_read() {
+  return read_cnt(fs_device);
+}
+
+unsigned int fs_device_write() {
+  return write_cnt(fs_device);
+}
 
 /* Initializes the file system module.
    If FORMAT is true, reformats the file system. */

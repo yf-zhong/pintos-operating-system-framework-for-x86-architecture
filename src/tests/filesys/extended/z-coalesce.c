@@ -1,4 +1,4 @@
-/* test hot cache performance should be better than code cache performance. */
+/* cache should coalesce multiple block write into one. */
 
 #include <syscall.h>
 #include "tests/lib.h"
