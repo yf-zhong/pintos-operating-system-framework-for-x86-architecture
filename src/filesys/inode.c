@@ -36,13 +36,14 @@ static inline size_t bytes_to_sectors(off_t size) { return DIV_ROUND_UP(size, BL
 /* Return the number of all sectors for an inode SIZE bytes, including root and internal nodes */
 static size_t bytes_to_blocks(off_t size) {
   size_t data_num = bytes_to_sectors(size);
-  if (data_num > DIR_NUM && data_num <= MAX_WITHOUT_D_INDIR) {
-    data_num += INDIR_NUM;
+  size_t internal_num = 0;
+  if (data_num > DIR_NUM) {
+    internal_num += INDIR_NUM;
   }
   if (data_num > MAX_WITHOUT_D_INDIR) {
-    data_num += DIV_ROUND_UP(data_num - MAX_WITHOUT_D_INDIR, INUMBER_PER_BLOCK) + D_INDIR_NUM + 1;
+    internal_num += D_INDIR_NUM + DIV_ROUND_UP(data_num - MAX_WITHOUT_D_INDIR, INUMBER_PER_BLOCK);
   }
-  return data_num;
+  return data_num + internal_num;
 }
 
 /* In-memory inode. */
