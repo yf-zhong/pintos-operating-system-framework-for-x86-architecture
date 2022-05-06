@@ -407,6 +407,6 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       break;
     
     default:
-      f->eax = -1; /* If the NUMBER is not defined */
+      sys_exit(f, -1); /* If the NUMBER is not defined */
   }
 }
