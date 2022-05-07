@@ -333,11 +333,6 @@ void process_exit(void) {
   struct process* pcb_to_free = cur->pcb;
 
   /* Close all the file descriptors */
-  // while (!list_empty(&pcb_to_free->file_descriptor_table)) {
-  //   struct list_elem *e = list_pop_front(&pcb_to_free->file_descriptor_table);
-  //   // size_t size = list_size(&pcb_to_free->file_descriptor_table);
-  //   free(list_entry(e, struct file_descriptor, elem));
-  // }
   struct list_elem *cur_file = list_begin(&pcb_to_free->file_descriptor_table);
   while (cur_file != list_end(&pcb_to_free->file_descriptor_table)) {
     struct file_descriptor* descriptor = list_entry(cur_file, struct file_descriptor, elem);

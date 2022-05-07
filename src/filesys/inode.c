@@ -160,7 +160,7 @@ bool inode_resize(struct inode_disk* ind_d, off_t size) {
     return true;
   }
 
-  size_t new_alloc_num = (num_block_new - num_block_old) > 0 ? (num_block_new - num_block_old) : 0;
+  size_t new_alloc_num = num_block_new > num_block_old ? (num_block_new - num_block_old) : 0;
   // list for storing allocated sector number
   block_sector_t* new_block_list = malloc(new_alloc_num * sizeof(block_sector_t));
   if (new_block_list == NULL && new_alloc_num != 0) {
