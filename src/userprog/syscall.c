@@ -149,6 +149,7 @@ void sys_open(struct intr_frame* f, const char* file) {
   new_file_descriptor->fd = pcb->cur_fd++;
   new_file_descriptor->file = new_file;
   new_file_descriptor->is_directory = is_dir;
+  new_file_descriptor->dir = dir_open(file_get_inode(new_file));
   list_push_back(&(pcb->file_descriptor_table) ,&(new_file_descriptor->elem));
   f->eax = new_file_descriptor->fd;
   return;
@@ -325,12 +326,12 @@ void sys_readdir(struct intr_frame* f, int fd, char* name) {
     return;
   }
   struct inode* inode = file_get_inode(my_file_des->file);
-  struct dir* dir = dir_open(inode);
+  struct dir* dir = my_file_des->dir;
   bool result = dir_readdir(dir, name);
   while (result && (strcmp(name, ".") == 0 || strcmp(name, "..") == 0)) {
     result = dir_readdir(dir, name);
   }
-  dir_close(dir);
+  // dir_close(dir);
   f->eax = result;
 }
 
@@ -480,21 +481,12 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
     /* Subdirectories */
     case SYS_CHDIR:
-      if ((sizeof(char*) - 1) & (unsigned long) &args[1]) {
-        sys_exit(f, -1);
-      }
       sys_chdir(f, (const char*) args[1]);
       break;
     case SYS_MKDIR:
-      if ((sizeof(char*) - 1) & (unsigned long) &args[1]) {
-        sys_exit(f, -1);
-      }
       sys_mkdir(f, (const char*) args[1]);
       break;
     case SYS_READDIR:
-      if ((sizeof(char*) - 1) & (unsigned long) &args[2]) {
-        sys_exit(f, -1);
-      }
       sys_readdir(f, args[1], (char*) args[2]);
       break;
     case SYS_ISDIR:
