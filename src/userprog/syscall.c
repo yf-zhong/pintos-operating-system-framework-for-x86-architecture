@@ -294,6 +294,12 @@ void sys_mkdir(struct intr_frame* f, const char* dir) {
   }
   char name[NAME_MAX + 1];
   get_last_name(dir, name);
+  struct inode* unused;
+  if (dir_lookup(d, name, &unused)) {
+    dir_close(d);
+    f->eax = false;
+    return;
+  }
   if (free_map_allocate(1, &inode_sector) && dir_create(inode_sector, 2) && dir_add(d, name, inode_sector, true)) {
     struct dir* new_d = dir_open(inode_open(inode_sector));
     dir_add(new_d, ".", inode_sector, true);

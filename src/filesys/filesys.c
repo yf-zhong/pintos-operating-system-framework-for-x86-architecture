@@ -109,7 +109,7 @@ bool filesys_remove(const char* name) {
   struct dir* parent_dir = tracing(name, true);
 
   if (check_is_dir(parent_dir, last_name)) {
-    if (get_open_cnt(inode) > 0) {
+    if (get_open_cnt(inode) > 1) {
       dir_close(d);
       dir_close(parent_dir);
       return false;
