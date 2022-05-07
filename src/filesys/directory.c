@@ -69,19 +69,20 @@ struct dir* tracing(const char* path, bool is_md) {
   char curr[NAME_MAX + 1];
   struct dir* curr_dir = NULL;
   struct inode* curr_inode = NULL;
-  int flag = get_next_part(curr, &clean_path);
+  char* clean_path_ptr = clean_path;
+  int flag = get_next_part(curr, &clean_path_ptr);
 
   if (flag > 0) {
     if (dir_lookup(cwd, curr, &curr_inode) || dir_lookup(root, curr, &curr_inode)) {
       dir_close(root);
       curr_dir = dir_open(curr_inode);
-      int result = get_next_part(curr, &clean_path);
+      int result = get_next_part(curr, &clean_path_ptr);
       while (result > 0) {
         if (dir_lookup(curr_dir, curr, &curr_inode)) {
           struct dir* dir_to_close = curr_dir;
           curr_dir = dir_open(curr_inode);
           dir_close(dir_to_close);
-          result = get_next_part(curr, &clean_path);
+          result = get_next_part(curr, &clean_path_ptr);
         } else {
           result = -1;
         }
