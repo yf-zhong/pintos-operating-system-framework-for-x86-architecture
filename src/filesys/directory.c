@@ -31,12 +31,15 @@ struct inode* get_inode(struct dir* dir) {
 
 struct dir* get_parent(struct dir* d) {
   struct dir_entry e;
+  off_t pos = d->pos;
   while (inode_read_at(d->inode, &e, sizeof e, d->pos) == sizeof e) {
     d->pos += sizeof e;
     if (e.in_use && strcmp(e.name, "..") == 0) {
+      d->pos = pos;
       return dir_open(inode_open(e.inode_sector));
     }
   }
+  d->pos = pos;
   return dir_open_root();
 }
 
@@ -116,13 +119,19 @@ block_sector_t get_inode_sector(struct dir* de) {
 }
 
 bool check_is_dir(struct dir* parent_dir, char name[NAME_MAX + 1]) {
+  if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) {
+    return true;
+  }
   struct dir_entry e;
+  off_t pos = parent_dir->pos;
   while (inode_read_at(parent_dir->inode, &e, sizeof e, parent_dir->pos) == sizeof e) {
     parent_dir->pos += sizeof e;
     if (e.in_use && strcmp(e.name, name) == 0) {
+      parent_dir->pos = pos;
       return e.is_directory;
     }
   }
+  parent_dir->pos = pos;
   return false;
 }
 

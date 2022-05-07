@@ -1,5 +1,31 @@
 FAIL tests/userprog/no-vm/multi-oom
 FAIL tests/filesys/extended/dir-rm-tree
-FAIL tests/filesys/extended/dir-rmdir
 FAIL tests/filesys/extended/dir-vine
 FAIL tests/filesys/extended/syn-rw
+
+
+FAIL tests/filesys/extended/dir-empty-name-persistence
+FAIL tests/filesys/extended/dir-mk-tree-persistence
+FAIL tests/filesys/extended/dir-mkdir-persistence
+FAIL tests/filesys/extended/dir-open-persistence
+FAIL tests/filesys/extended/dir-over-file-persistence
+FAIL tests/filesys/extended/dir-rm-cwd-persistence
+FAIL tests/filesys/extended/dir-rm-parent-persistence
+FAIL tests/filesys/extended/dir-rm-root-persistence
+FAIL tests/filesys/extended/dir-rm-tree-persistence
+FAIL tests/filesys/extended/dir-rmdir-persistence
+FAIL tests/filesys/extended/dir-under-file-persistence
+FAIL tests/filesys/extended/dir-vine-persistence
+FAIL tests/filesys/extended/grow-create-persistence
+FAIL tests/filesys/extended/grow-dir-lg-persistence
+FAIL tests/filesys/extended/grow-file-size-persistence
+FAIL tests/filesys/extended/grow-root-lg-persistence
+FAIL tests/filesys/extended/grow-root-sm-persistence
+FAIL tests/filesys/extended/grow-seq-lg-persistence
+FAIL tests/filesys/extended/grow-seq-sm-persistence
+FAIL tests/filesys/extended/grow-sparse-persistence
+FAIL tests/filesys/extended/grow-tell-persistence
+FAIL tests/filesys/extended/grow-two-files-persistence
+FAIL tests/filesys/extended/syn-rw-persistence
+FAIL tests/filesys/extended/z-performance-persistence
+FAIL tests/filesys/extended/z-coalesce-persistence
