@@ -330,7 +330,6 @@ void sys_readdir(struct intr_frame* f, int fd, char* name) {
   while (result && (strcmp(name, ".") == 0 || strcmp(name, "..") == 0)) {
     result = dir_readdir(dir, name);
   }
-  dir_close(dir);
   f->eax = result;
 }
 

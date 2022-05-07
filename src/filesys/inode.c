@@ -74,10 +74,11 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
   ASSERT(inode != NULL);
   struct inode_disk* inode_content = calloc(BLOCK_SECTOR_SIZE, 1);
   if (inode_content == NULL) {
+    free(inode_content);
     return -1;
   }
   cache_read((void*)inode_content, inode->sector);
-  if (pos > inode_content->length) {
+  if (pos >= inode_content->length) {
     free(inode_content);
     return -1;
   }
