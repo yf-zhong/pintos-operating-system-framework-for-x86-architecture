@@ -1,8 +1,6 @@
 FAIL tests/userprog/no-vm/multi-oom
 FAIL tests/filesys/extended/dir-rm-tree
 FAIL tests/filesys/extended/dir-vine
-FAIL tests/filesys/extended/dir-rmdir
-
 
 FAIL tests/filesys/extended/dir-empty-name-persistence
 FAIL tests/filesys/extended/dir-mk-tree-persistence

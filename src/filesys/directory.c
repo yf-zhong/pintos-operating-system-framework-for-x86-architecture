@@ -29,14 +29,25 @@ struct inode* get_inode(struct dir* dir) {
   return dir->inode;
 }
 
+char* remove_dot(char* p) {
+  char ret[strlen(p)];
+  ret[0] = '\0';
+  char last[NAME_MAX + 1];
+  while (get_next_part(last, &p) != 0) {
+    strlcat(ret, last, strlen(last));
+    strlcat(ret, "/", 1);
+  }
+  return ret;
+}
+
 char* cut_path(char* p) {
-  char ret[NAME_MAX + 1];
   
 }
 
 /* parsing the path and trace the directory until no more path string or error occurs. 
 Mainly used in mkdir and chdir */
 struct dir* tracing(const char* path, bool is_md) {
+  path = remove_dot(path);
   if (is_md) {
     path = cut_path(path);
   }
@@ -118,21 +129,24 @@ static int get_next_part(char part[NAME_MAX + 1], const char** srcp) {
   while (*src == '/') {
     src++;
   }
-  if (*src == '\0') {
-    return 0;
-  }
   /* Copy up to NAME_MAX character from SRC to DST. Add null terminator. */
-  while (*src != '/' && *src != '\0') {
-    if (dst < part + NAME_MAX) {
-      *dst++ = *src;
-    } else {
-      return -1;
+  do {
+    if (*src == '\0') {
+      return 0;
     }
-    src++;
-  }
-  *dst = '\0';
-  /* Advance source pointer. */
-  *srcp = src;
+    while (*src != '/' && *src != '\0') {
+      if (dst < part + NAME_MAX) {
+        *dst++ = *src;
+      } else {
+        return -1;
+      }
+      src++;
+    }
+    *dst = '\0';
+    /* Advance source pointer. */
+    *srcp = src;
+  } while (strcmp(*dst, ".") == 0);
+
   return 1;
 }
 
