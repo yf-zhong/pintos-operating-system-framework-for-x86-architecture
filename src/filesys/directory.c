@@ -34,8 +34,8 @@ void remove_dot(const char* p, char* container) {
   container[0] = '\0';
   char last[NAME_MAX + 1];
   while (get_next_part(last, &p) != 0) {
-    strlcat(container, last, strlen(last) + 1);
-    strlcat(container, "/", 2);
+    strlcat(container, last, strlen(p) + 2);
+    strlcat(container, "/", strlen(p) + 2);
   }
 }
 
