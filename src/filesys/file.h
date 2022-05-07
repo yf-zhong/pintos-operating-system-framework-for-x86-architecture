@@ -11,6 +11,7 @@ struct inode;
 struct file_descriptor {
    int fd;                   /* File descriptor */
    struct file* file;        /* File description */
+   struct dir* dir;
    struct list_elem elem;
    bool is_directory;        /* file or directory (for proj3 task3) */
 };

@@ -23,29 +23,23 @@ struct dir_entry {
 };
 
 static int get_next_part(char part[NAME_MAX + 1], const char** srcp);
-struct dir* get_parent(struct dir* d);
+char* cut_path(char* p);
 
 struct inode* get_inode(struct dir* dir) {
   return dir->inode;
 }
 
-struct dir* get_parent(struct dir* d) {
-  struct dir_entry e;
-  off_t pos = d->pos;
-  while (inode_read_at(d->inode, &e, sizeof e, d->pos) == sizeof e) {
-    d->pos += sizeof e;
-    if (e.in_use && strcmp(e.name, "..") == 0) {
-      d->pos = pos;
-      return dir_open(inode_open(e.inode_sector));
-    }
-  }
-  d->pos = pos;
-  return dir_open_root();
+char* cut_path(char* p) {
+  char ret[NAME_MAX + 1];
+  
 }
 
 /* parsing the path and trace the directory until no more path string or error occurs. 
 Mainly used in mkdir and chdir */
 struct dir* tracing(const char* path, bool is_md) {
+  if (is_md) {
+    path = cut_path(path);
+  }
   struct dir* root = dir_open_root();
   struct dir* cwd = thread_current()->pcb->cwd;
   char curr[NAME_MAX + 1];
@@ -65,45 +59,23 @@ struct dir* tracing(const char* path, bool is_md) {
           dir_close(dir_to_close);
           result = get_next_part(curr, &path);
         } else {
-          result = -2;
+          result = -1;
         }
       }
       if (result == -1) {
         dir_close(curr_dir);
         return NULL;
-      } else if (result == -2) {
-        if (get_next_part(curr, &path) == 0) {
-          if (is_md) {
-            return curr_dir;
-          } else {
-            dir_close(curr_dir);
-            return NULL;
-          }
-        } else {
-          dir_close(curr_dir);
-          return NULL;
-        }
       }
-      if (is_md) {
-        struct dir* d = get_parent(curr_dir);
-        dir_close(curr_dir);
-        return d;
-      } else {
-        return curr_dir;
-      }
+      return curr_dir;
     } else {
       dir_close(root);
-      if (get_next_part(curr, &path) == 0) {
-        if (is_md) {
-          return dir_reopen(cwd);
-        } else {
-          return NULL;
-        }
-      } else {
-        return NULL;
-      }
+      return NULL;
     }
   } else {
+    if (is_md) {
+      dir_close(root);
+      return dir_reopen(cwd);
+    }
     if (strcmp(path, "") == 0 || flag != 0) {
       dir_close(root);
       return NULL;
