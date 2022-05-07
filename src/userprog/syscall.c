@@ -325,7 +325,6 @@ void sys_readdir(struct intr_frame* f, int fd, char* name) {
     f->eax = false;
     return;
   }
-  struct inode* inode = file_get_inode(my_file_des->file);
   struct dir* dir = my_file_des->dir;
   bool result = dir_readdir(dir, name);
   while (result && (strcmp(name, ".") == 0 || strcmp(name, "..") == 0)) {

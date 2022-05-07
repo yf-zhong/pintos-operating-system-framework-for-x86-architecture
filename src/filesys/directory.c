@@ -23,52 +23,64 @@ struct dir_entry {
 };
 
 static int get_next_part(char part[NAME_MAX + 1], const char** srcp);
-char* cut_path(char* p);
+void cut_path(char* p, char* container);
+void remove_dot(const char* p, char* container);
 
 struct inode* get_inode(struct dir* dir) {
   return dir->inode;
 }
 
-char* remove_dot(char* p) {
-  char ret[strlen(p)];
-  ret[0] = '\0';
+void remove_dot(const char* p, char* container) {
+  container[0] = '\0';
   char last[NAME_MAX + 1];
   while (get_next_part(last, &p) != 0) {
-    strlcat(ret, last, strlen(last));
-    strlcat(ret, "/", 1);
+    strlcat(container, last, strlen(last) + 1);
+    strlcat(container, "/", 2);
   }
-  return ret;
 }
 
-char* cut_path(char* p) {
-  
+void cut_path(char* p, char* container) {
+  size_t len = strlen(p);
+  if (len == 0) {
+    return;
+  }
+  while (len >= 2 && p[len - 2] != '/') {
+    len--;
+  }
+  strlcpy(container, p, len);
 }
 
 /* parsing the path and trace the directory until no more path string or error occurs. 
 Mainly used in mkdir and chdir */
 struct dir* tracing(const char* path, bool is_md) {
-  path = remove_dot(path);
+  if (strcmp(path, "") == 0) {
+    return NULL;
+  }
+  char clean_path[strlen(path) + 2];
+  remove_dot(path, clean_path);
   if (is_md) {
-    path = cut_path(path);
+    char temp[strlen(path) + 2];
+    strlcpy(temp, clean_path, strlen(clean_path) + 1);
+    cut_path(temp, clean_path);
   }
   struct dir* root = dir_open_root();
   struct dir* cwd = thread_current()->pcb->cwd;
   char curr[NAME_MAX + 1];
   struct dir* curr_dir = NULL;
   struct inode* curr_inode = NULL;
-  int flag = get_next_part(curr, &path);
+  int flag = get_next_part(curr, &clean_path);
 
   if (flag > 0) {
     if (dir_lookup(cwd, curr, &curr_inode) || dir_lookup(root, curr, &curr_inode)) {
       dir_close(root);
       curr_dir = dir_open(curr_inode);
-      int result = get_next_part(curr, &path);
+      int result = get_next_part(curr, &clean_path);
       while (result > 0) {
         if (dir_lookup(curr_dir, curr, &curr_inode)) {
           struct dir* dir_to_close = curr_dir;
           curr_dir = dir_open(curr_inode);
           dir_close(dir_to_close);
-          result = get_next_part(curr, &path);
+          result = get_next_part(curr, &clean_path);
         } else {
           result = -1;
         }
@@ -87,7 +99,7 @@ struct dir* tracing(const char* path, bool is_md) {
       dir_close(root);
       return dir_reopen(cwd);
     }
-    if (strcmp(path, "") == 0 || flag != 0) {
+    if (flag != 0) {
       dir_close(root);
       return NULL;
     } else {
@@ -145,7 +157,7 @@ static int get_next_part(char part[NAME_MAX + 1], const char** srcp) {
     *dst = '\0';
     /* Advance source pointer. */
     *srcp = src;
-  } while (strcmp(*dst, ".") == 0);
+  } while (strcmp(part, ".") == 0);
 
   return 1;
 }
