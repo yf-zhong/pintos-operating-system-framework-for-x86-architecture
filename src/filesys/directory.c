@@ -78,15 +78,21 @@ struct dir* tracing(const char* path, bool is_md) {
       struct dir* d;
       if (is_md) {
         if (last_dir) {
-          d = last_dir;
+          d = dir_reopen(last_dir);
+          dir_close(root);
+          dir_close(last_dir);
           dir_close(curr_dir);
         } else {
-          d = root;
+          d = dir_reopen(root);
+          dir_close(root);
+          dir_close(last_dir);
           dir_close(curr_dir);
         }
       } else {
-        d = curr_dir;
+        d = dir_reopen(curr_dir);
+        dir_close(root);
         dir_close(last_dir);
+        dir_close(curr_dir);
       }
       return d;
     } else {
@@ -104,8 +110,12 @@ struct dir* tracing(const char* path, bool is_md) {
       }
     }
   } else {
-    dir_close(root);
-    return NULL;
+    if (strcmp(path, "") == 0) {
+      dir_close(root);
+      return NULL;
+    } else {
+      return root;
+    }
   }
 }
 
