@@ -45,6 +45,12 @@ void sys_close(struct intr_frame*, int);
 /* FPU ops */
 void sys_comp_e(struct intr_frame*, int);
 
+/* Subdirectories */
+void sys_chdir(struct intr_frame*, const char*);
+void sys_mkdir(struct intr_frame*, const char*);
+void sys_readdir(struct intr_frame*, int, char*);
+void sys_isdir(struct intr_frame*, int);
+
 /* File sytem syscall */
 void sys_inumber(struct intr_frame*, int);
 
@@ -487,6 +493,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       break;
     case SYS_ISDIR:
       sys_isdir(f, args[1]);
+      break;
     /* File system inode */
     case SYS_INUMBER:
       sys_inumber(f, args[1]);
