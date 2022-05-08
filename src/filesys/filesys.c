@@ -34,11 +34,13 @@ void filesys_init(bool format) {
   free_map_init();
   cache_init();
 
-  if (format)
+  if (format) {
     do_format();
-
+  } else {
+    thread_current()->pcb->cwd = dir_open_root();
+  }
+    
   free_map_open();
-  thread_current()->pcb->cwd = dir_open_root();
 }
 
 /* Shuts down the file system module, writing any unwritten data
@@ -143,6 +145,9 @@ static void do_format(void) {
   free_map_create();
   if (!dir_create(ROOT_DIR_SECTOR, 16))
     PANIC("root directory creation failed");
+  thread_current()->pcb->cwd = dir_open_root();
+  dir_add(thread_current()->pcb->cwd, ".", ROOT_DIR_SECTOR, true);
+  dir_add(thread_current()->pcb->cwd, "..", ROOT_DIR_SECTOR, true);
   free_map_close();
   printf("done.\n");
 }
