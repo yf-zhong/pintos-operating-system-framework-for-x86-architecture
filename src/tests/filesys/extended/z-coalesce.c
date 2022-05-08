@@ -45,7 +45,8 @@ void test_main(void) {
   write_file();
   read_file();
   int block_write_after = fs_device_write_cnt();
-  ASSERT((64 <= block_write_after - block_write_before) || (block_write_after - block_write_before <= 256));
+  ASSERT((64 <= block_write_after - block_write_before) ||
+         (block_write_after - block_write_before <= 256));
   CHECK(remove(file_name), "remove \"%s\"", file_name);
   return;
 }

@@ -26,10 +26,9 @@ struct lock cache_lock;
 struct cache_block* new_cache_block();
 struct cache_block* find_block_and_acq_lock(block_sector_t bst, bool reader);
 
-
 /* make a new cache block */
 struct cache_block* new_cache_block() {
-  struct cache_block* b = (struct cache_block*) calloc(sizeof(struct cache_block), 1);
+  struct cache_block* b = (struct cache_block*)calloc(sizeof(struct cache_block), 1);
   b->is_dirty = false;
   b->is_valid = false;
   rw_lock_init(&b->lock);
@@ -99,8 +98,7 @@ struct cache_block* find_block_and_acq_lock(block_sector_t bst, bool reader) {
     b->is_valid = true;
     b->is_dirty = false;
     rw_lock_release(&b->lock, false);
-  }
-  else {
+  } else {
     b->hit_cnt++;
   }
   rw_lock_acquire(&b->lock, reader);
@@ -112,7 +110,7 @@ void cache_destroy() {
   while (!list_empty(&cache)) {
     struct list_elem* e = list_pop_front(&cache);
     struct cache_block* b = list_entry(e, struct cache_block, elem);
-    // acquire write lock because we want to destroy the cache block, 
+    // acquire write lock because we want to destroy the cache block,
     // so wait for any access from other threads to finish
     rw_lock_acquire(&b->lock, false);
     // write any dirty block to disk

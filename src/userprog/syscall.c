@@ -57,7 +57,7 @@ void sys_inumber(struct intr_frame*, int);
 bool is_valid_addr(uint32_t addr) {
   uint32_t* pd = thread_current()->pcb->pagedir;
   for (int i = 0; i < 4; i++) {
-    if (!(is_user_vaddr((const char *) addr + i) && pagedir_get_page(pd, (const char *) addr + i))) {
+    if (!(is_user_vaddr((const char*)addr + i) && pagedir_get_page(pd, (const char*)addr + i))) {
       return false;
     }
   }
@@ -75,24 +75,19 @@ bool is_valid_str(const char* c) {
   return false;
 }
 
-void syscall_init(void) {
-  intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
-}
+void syscall_init(void) { intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall"); }
 
 void sys_practice(struct intr_frame* f, int i) {
   f->eax = i + 1;
   return;
 }
 
-void sys_halt() {
-  shutdown_power_off();
-}
+void sys_halt() { shutdown_power_off(); }
 
 void sys_exec(struct intr_frame* f, const char* cmd_line) {
   if (is_valid_str(cmd_line)) {
     f->eax = process_execute(cmd_line);
-  }
-  else {
+  } else {
     sys_exit(f, -1);
   }
   return;
@@ -104,13 +99,13 @@ void sys_wait(struct intr_frame* f, pid_t pid) {
 }
 
 void sys_exit(struct intr_frame* f, int status) {
-    f->eax = status;
-    struct process* pcb = thread_current()->pcb;
-    pcb->curr_as_child->exit_status = status;
-    process_exit();
+  f->eax = status;
+  struct process* pcb = thread_current()->pcb;
+  pcb->curr_as_child->exit_status = status;
+  process_exit();
 }
 
-void sys_create(struct intr_frame* f, const char* file, unsigned initial_size) {  
+void sys_create(struct intr_frame* f, const char* file, unsigned initial_size) {
   if (!is_valid_str(file)) {
     sys_exit(f, -1);
   }
@@ -137,12 +132,13 @@ void sys_open(struct intr_frame* f, const char* file) {
   }
   struct process* pcb = thread_current()->pcb;
   bool is_dir = false;
-  struct file *new_file = filesys_open(file, &is_dir);
+  struct file* new_file = filesys_open(file, &is_dir);
   if (!new_file) {
     f->eax = -1;
     return;
   }
-  struct file_descriptor *new_file_descriptor = (struct file_descriptor *) malloc(sizeof(struct file_descriptor));
+  struct file_descriptor* new_file_descriptor =
+      (struct file_descriptor*)malloc(sizeof(struct file_descriptor));
   if (!new_file_descriptor) {
     sys_exit(f, -1);
   }
@@ -150,7 +146,7 @@ void sys_open(struct intr_frame* f, const char* file) {
   new_file_descriptor->file = new_file;
   new_file_descriptor->is_directory = is_dir;
   new_file_descriptor->dir = dir_open(file_get_inode(new_file));
-  list_push_back(&(pcb->file_descriptor_table) ,&(new_file_descriptor->elem));
+  list_push_back(&(pcb->file_descriptor_table), &(new_file_descriptor->elem));
   f->eax = new_file_descriptor->fd;
   return;
 }
@@ -160,7 +156,7 @@ void sys_filesize(struct intr_frame* f, int fd) {
     sys_exit(f, -1);
   }
   off_t file_size;
-  struct file_descriptor *my_file_des = find_file_des(fd);
+  struct file_descriptor* my_file_des = find_file_des(fd);
   if (!my_file_des) {
     sys_exit(f, -1);
   }
@@ -185,7 +181,7 @@ void sys_read(struct intr_frame* f, int fd, void* buffer, unsigned size) {
   } else if (fd == 1 || fd < 0) {
     sys_exit(f, -1);
   }
-  struct file_descriptor *my_file_des = find_file_des(fd);
+  struct file_descriptor* my_file_des = find_file_des(fd);
   if (!my_file_des || my_file_des->is_directory) {
     sys_exit(f, -1);
   }
@@ -204,7 +200,7 @@ void sys_write(struct intr_frame* f, int fd, const void* buffer, unsigned size) 
   } else if (fd <= 0) {
     sys_exit(f, -1);
   } else {
-    struct file_descriptor *my_file_des = find_file_des(fd);
+    struct file_descriptor* my_file_des = find_file_des(fd);
     if (!my_file_des || my_file_des->is_directory) {
       sys_exit(f, -1);
     }
@@ -212,7 +208,6 @@ void sys_write(struct intr_frame* f, int fd, const void* buffer, unsigned size) 
     bytes_read = file_write(my_file_des->file, buffer, size);
     f->eax = bytes_read;
     return;
-    
   }
   return;
 }
@@ -306,7 +301,8 @@ void sys_mkdir(struct intr_frame* f, const char* dir) {
     f->eax = false;
     return;
   }
-  if (free_map_allocate(1, &inode_sector) && dir_create(inode_sector, 2) && dir_add(d, name, inode_sector, true)) {
+  if (free_map_allocate(1, &inode_sector) && dir_create(inode_sector, 2) &&
+      dir_add(d, name, inode_sector, true)) {
     struct dir* new_d = dir_open(inode_open(inode_sector));
     dir_add(new_d, ".", inode_sector, true);
     dir_add(new_d, "..", get_inode_sector(d), true);
@@ -373,13 +369,13 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
    * include it in your final submission.
    */
 
-   /* Validate stack pointer */
+  /* Validate stack pointer */
   if (!is_valid_addr((uint32_t)args)) {
     sys_exit(f, -1);
   }
 
   int num_args = 0;
-  switch(args[0]) {
+  switch (args[0]) {
     case SYS_WRITE:
     case SYS_READ:
       num_args = 3;
@@ -413,7 +409,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     sys_exit(f, -1);
   }
 
-  switch(args[0]) {
+  switch (args[0]) {
     case SYS_PRACTICE:
       sys_practice(f, args[1]);
       break;
@@ -424,10 +420,10 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       sys_wait(f, args[1]);
       break;
     case SYS_EXEC:
-      if (((sizeof(pid_t) - 1) & (unsigned long) &args[1]) || !is_valid_addr((uint32_t) &args[1])) {
+      if (((sizeof(pid_t) - 1) & (unsigned long)&args[1]) || !is_valid_addr((uint32_t)&args[1])) {
         sys_exit(f, -1);
       }
-      sys_exec(f, (char*) args[1]);
+      sys_exec(f, (char*)args[1]);
       break;
     case SYS_EXIT:
       sys_exit(f, args[1]);
@@ -435,37 +431,37 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
     /* File operations */
     case SYS_CREATE:
-      if ((sizeof(char*) - 1) & (unsigned long) &args[1]) {
+      if ((sizeof(char*) - 1) & (unsigned long)&args[1]) {
         sys_exit(f, -1);
       }
-      sys_create(f, (const char*) args[1], args[2]);
+      sys_create(f, (const char*)args[1], args[2]);
       break;
     case SYS_REMOVE:
-      if ((sizeof(char*) - 1) & (unsigned long) &args[1]) {
+      if ((sizeof(char*) - 1) & (unsigned long)&args[1]) {
         sys_exit(f, -1);
       }
-      sys_remove(f, (const char*) args[1]);
+      sys_remove(f, (const char*)args[1]);
       break;
     case SYS_OPEN:
-      if ((sizeof(char*) - 1) & (unsigned long) &args[1]) {
+      if ((sizeof(char*) - 1) & (unsigned long)&args[1]) {
         sys_exit(f, -1);
       }
-      sys_open(f, (const char*) args[1]);
+      sys_open(f, (const char*)args[1]);
       break;
     case SYS_FILESIZE:
       sys_filesize(f, args[1]);
       break;
     case SYS_READ:
-      if ((sizeof(void*) - 1) & (unsigned long) &args[2]) {
+      if ((sizeof(void*) - 1) & (unsigned long)&args[2]) {
         sys_exit(f, -1);
       }
-      sys_read(f, args[1], (void*) args[2], args[3]);
+      sys_read(f, args[1], (void*)args[2], args[3]);
       break;
     case SYS_WRITE:
-      if ((sizeof(void*) - 1) & (unsigned long) &args[2]) {
+      if ((sizeof(void*) - 1) & (unsigned long)&args[2]) {
         sys_exit(f, -1);
       }
-      sys_write(f, args[1], (const void*) args[2], args[3]);
+      sys_write(f, args[1], (const void*)args[2], args[3]);
       break;
     case SYS_SEEK:
       sys_seek(f, args[1], args[2]);
@@ -484,13 +480,13 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
     /* Subdirectories */
     case SYS_CHDIR:
-      sys_chdir(f, (const char*) args[1]);
+      sys_chdir(f, (const char*)args[1]);
       break;
     case SYS_MKDIR:
-      sys_mkdir(f, (const char*) args[1]);
+      sys_mkdir(f, (const char*)args[1]);
       break;
     case SYS_READDIR:
-      sys_readdir(f, args[1], (char*) args[2]);
+      sys_readdir(f, args[1], (char*)args[2]);
       break;
     case SYS_ISDIR:
       sys_isdir(f, args[1]);
@@ -499,7 +495,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     case SYS_INUMBER:
       sys_inumber(f, args[1]);
       break;
-  
+
     case SYS_CACHE_HIT:
       f->eax = get_cache_hit_cnt();
       break;
@@ -519,7 +515,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     case SYS_BLOCK_WRITE:
       f->eax = fs_device_write();
       break;
-    
+
     default:
       f->eax = -1; /* If the NUMBER is not defined */
   }

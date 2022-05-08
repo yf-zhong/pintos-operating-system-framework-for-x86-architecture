@@ -22,7 +22,7 @@ void fill_sector_with_zeros(block_sector_t);
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
 struct inode_disk {
   block_sector_t direct[DIR_NUM]; /* Direct block pointer. */
-  block_sector_t indirect; /* Indirect block pointer. */
+  block_sector_t indirect;        /* Indirect block pointer. */
   block_sector_t indirect_double; /* Double indirect block pointer. */
 
   off_t length;         /* File size in bytes. */
@@ -54,17 +54,13 @@ struct inode {
   int open_cnt;           /* Number of openers. */
   bool removed;           /* True if deleted, false otherwise. */
   int deny_write_cnt;     /* 0: writes ok, >0: deny writes. */
-  struct lock inode_lock; /* Lock for each inode struct. */  
+  struct lock inode_lock; /* Lock for each inode struct. */
 };
 
 /* helper for proj3 task3 */
-int get_open_cnt(struct inode* inode) {
-  return inode->open_cnt;
-}
+int get_open_cnt(struct inode* inode) { return inode->open_cnt; }
 
-int get_bst(struct inode* inode) {
-  return inode->sector;
-}
+int get_bst(struct inode* inode) { return inode->sector; }
 
 /* Returns the block device sector that contains byte offset POS
    within INODE.
@@ -121,8 +117,9 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
 
     // Read second level indirect pointer
     block_sector_t* indir2_content = calloc(BLOCK_SECTOR_SIZE, 1);
-    cache_read((void*)indir2_content, indir_content[(sector_num - 1) / INUMBER_PER_BLOCK]); // Start from 0, no need to + 1
-    
+    cache_read((void*)indir2_content,
+               indir_content[(sector_num - 1) / INUMBER_PER_BLOCK]); // Start from 0, no need to + 1
+
     block_sector_t result = indir2_content[(sector_num - 1) % INUMBER_PER_BLOCK];
     free(inode_content);
     free(indir_content);
@@ -255,7 +252,8 @@ bool inode_resize(struct inode_disk* ind_d, off_t size) {
   }
   // Handle sub-indir ptr
   for (int i = 0; i < INUMBER_PER_BLOCK; i++) {
-    if (size <= (MAX_WITHOUT_D_INDIR + i * INUMBER_PER_BLOCK) * BLOCK_SECTOR_SIZE && buffer1[i] != 0) {
+    if (size <= (MAX_WITHOUT_D_INDIR + i * INUMBER_PER_BLOCK) * BLOCK_SECTOR_SIZE &&
+        buffer1[i] != 0) {
       // Shrink first pointer
       free_map_release(buffer1[i], 1);
       buffer1[i] = 0;
@@ -275,11 +273,13 @@ bool inode_resize(struct inode_disk* ind_d, off_t size) {
         cache_read((void*)buffer2, buffer1[i]);
       }
       for (int j = 0; j < INUMBER_PER_BLOCK; j++) {
-        if (size <= (MAX_WITHOUT_D_INDIR + i * INUMBER_PER_BLOCK + j) * BLOCK_SECTOR_SIZE && buffer2[j] != 0) {
+        if (size <= (MAX_WITHOUT_D_INDIR + i * INUMBER_PER_BLOCK + j) * BLOCK_SECTOR_SIZE &&
+            buffer2[j] != 0) {
           // Shrink second pointer
           free_map_release(buffer2[j], 1);
           buffer2[j] = 0;
-        } else if (size > (MAX_WITHOUT_D_INDIR + i * INUMBER_PER_BLOCK + j) * BLOCK_SECTOR_SIZE && buffer2[j] == 0) {
+        } else if (size > (MAX_WITHOUT_D_INDIR + i * INUMBER_PER_BLOCK + j) * BLOCK_SECTOR_SIZE &&
+                   buffer2[j] == 0) {
           // Grow second pointer
           buffer2[j] = new_block_list[new_list_i++];
         }
@@ -513,7 +513,7 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
 
     if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE) {
       /* Write full sector directly to disk. */
-      cache_write((void *) (buffer + bytes_written), sector_idx);
+      cache_write((void*)(buffer + bytes_written), sector_idx);
     } else {
       /* We need a bounce buffer. */
       if (bounce == NULL) {

@@ -19,7 +19,7 @@
 #include "threads/synch.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
- 
+
 static thread_func start_process NO_RETURN;
 static bool load(const char* file_name, void (**eip)(void), void** esp);
 CHILD* new_child(void);
@@ -52,13 +52,13 @@ void userprog_init(void) {
 }
 
 CHILD* new_child() {
-  CHILD* cptr = (CHILD*) palloc_get_page(0);
+  CHILD* cptr = (CHILD*)palloc_get_page(0);
   if (cptr == NULL) {
     return NULL;
   }
   sema_init(&cptr->exec_sema, 0);
   sema_init(&cptr->wait_sema, 0);
-  cptr-> exit_status = ERROR;
+  cptr->exit_status = ERROR;
   cptr->is_exited = false;
   cptr->is_waiting = false;
   cptr->ref_cnt = 2;
@@ -82,7 +82,7 @@ pid_t process_execute(const char* file_name) {
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
-  spaptr = (SPA*) palloc_get_page(0);
+  spaptr = (SPA*)palloc_get_page(0);
   if (spaptr == NULL)
     return TID_ERROR;
   spaptr->file_name = palloc_get_page(0);
@@ -92,13 +92,12 @@ pid_t process_execute(const char* file_name) {
     return TID_ERROR;
   }
   strlcpy(spaptr->file_name, file_name, PGSIZE - sizeof(spaptr->new_c));
-  
-  char* file_name_cpy = (char*) malloc(sizeof(char) * (strlen(file_name) + 1));
+
+  char* file_name_cpy = (char*)malloc(sizeof(char) * (strlen(file_name) + 1));
   char* cpy_base = file_name_cpy;
   strlcpy(file_name_cpy, file_name, strlen(file_name) + 1);
   char** saveptr = &file_name_cpy;
   char* prog_name = strtok_r(file_name_cpy, " ", saveptr);
-
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create(prog_name, PRI_DEFAULT, start_process, spaptr);
@@ -108,8 +107,7 @@ pid_t process_execute(const char* file_name) {
   list_push_front(&pcb->children, &spaptr->new_c->elem);
   if (tid == TID_ERROR) {
     free_spa(spaptr);
-  }
-  else {
+  } else {
     if (spaptr->new_c->is_exited && spaptr->new_c->exit_status == ERROR) {
       tid = -1;
     }
@@ -118,7 +116,7 @@ pid_t process_execute(const char* file_name) {
   return tid;
 }
 
-void t_pcb_init(struct thread* t, struct process *new_pcb, CHILD *new_c) {
+void t_pcb_init(struct thread* t, struct process* new_pcb, CHILD* new_c) {
   new_pcb->pagedir = NULL;
   t->pcb = new_pcb;
   t->pcb->main_thread = t;
@@ -136,7 +134,7 @@ void t_pcb_init(struct thread* t, struct process *new_pcb, CHILD *new_c) {
 /* A thread function that loads a user process and starts it
    running. */
 static void start_process(void* spaptr_) {
-  SPA* spaptr = (SPA*) spaptr_;
+  SPA* spaptr = (SPA*)spaptr_;
   char* file_name = spaptr->file_name;
   CHILD* new_c = spaptr->new_c;
   struct thread* t = thread_current();
@@ -154,7 +152,7 @@ static void start_process(void* spaptr_) {
     t_pcb_init(t, new_pcb, new_c);
     t->pcb->cwd = dir_reopen(spaptr->cwd);
   }
- 
+
   /* Initialize interrupt frame and load executable. */
   if (success) {
     memset(&if_, 0, sizeof if_);
@@ -173,8 +171,8 @@ static void start_process(void* spaptr_) {
 
     success = load(file_name, &if_.eip, &if_.esp);
   }
-  
-  if(success) {
+
+  if (success) {
     struct file* file = filesys_open(t->pcb->process_name, NULL);
     t->pcb->curr_executable = file;
     file_deny_write(file);
@@ -210,10 +208,9 @@ static void start_process(void* spaptr_) {
 }
 
 CHILD* find_child(pid_t pid) {
-  struct list *children = &thread_current()->pcb->children;
+  struct list* children = &thread_current()->pcb->children;
   CHILD* cptr;
-  for (struct list_elem *e = list_begin(children); e != list_end(children);
-      e = list_next(e)) {
+  for (struct list_elem* e = list_begin(children); e != list_end(children); e = list_next(e)) {
     cptr = list_entry(e, CHILD, elem);
     if (cptr->pid == pid) {
       return cptr;
@@ -251,16 +248,15 @@ void decrement_ref_cnt(CHILD* cptr) {
     lock_release(&cptr->ref_lock);
     palloc_free_page(cptr);
     return;
-  }
-  else {
+  } else {
     lock_release(&cptr->ref_lock);
     return;
   }
 }
 
 void decrement_children_ref_cnt(struct process* pcb) {
-  struct list_elem *e = list_begin(&pcb->children);
-  struct list_elem *next_e;
+  struct list_elem* e = list_begin(&pcb->children);
+  struct list_elem* next_e;
   CHILD* cptr;
   while (e != list_end(&pcb->children)) {
     next_e = list_next(e);
@@ -280,8 +276,9 @@ void exit_setup(struct process* pcb_to_free) {
 
 struct file_descriptor* find_file_des(int fd) {
   struct process* pcb = thread_current()->pcb;
-  struct list_elem *e;
-  for (e = list_begin(&(pcb->file_descriptor_table)); e != list_end(&(pcb->file_descriptor_table)); e = list_next(e)) {
+  struct list_elem* e;
+  for (e = list_begin(&(pcb->file_descriptor_table)); e != list_end(&(pcb->file_descriptor_table));
+       e = list_next(e)) {
     struct file_descriptor* descriptor = list_entry(e, struct file_descriptor, elem);
     if (descriptor->fd == fd) {
       return descriptor;
@@ -325,7 +322,7 @@ void process_exit(void) {
   struct process* pcb_to_free = cur->pcb;
 
   /* Close all the file descriptors */
-  struct list_elem *cur_file = list_begin(&pcb_to_free->file_descriptor_table);
+  struct list_elem* cur_file = list_begin(&pcb_to_free->file_descriptor_table);
   while (cur_file != list_end(&pcb_to_free->file_descriptor_table)) {
     struct file_descriptor* descriptor = list_entry(cur_file, struct file_descriptor, elem);
     cur_file = list_next(cur_file);
@@ -446,17 +443,17 @@ void push_stack(void** esp, void* src, size_t size) {
 void args_split(char* file_name, char* argv[]) {
   char** saveptr = &file_name;
   char* arg = strtok_r(file_name, " ", saveptr);
-  for(int i = 0; arg != (char*) NULL; i++) {
+  for (int i = 0; arg != (char*)NULL; i++) {
     argv[i] = arg;
-    arg = strtok_r((char*) NULL, " ", saveptr);
+    arg = strtok_r((char*)NULL, " ", saveptr);
   }
   return;
 }
 
 void args_load(const char* file_name, void** esp) {
-  char* file_name_cpy = (char*) malloc(sizeof(char) * (strlen(file_name) + 1));
+  char* file_name_cpy = (char*)malloc(sizeof(char) * (strlen(file_name) + 1));
   int nArgs = count_args(file_name);
-  char** args = (char**) malloc(sizeof(char*) * nArgs);
+  char** args = (char**)malloc(sizeof(char*) * nArgs);
   unsigned int allByteCount = sizeof(char*) * (nArgs + 1) + sizeof(char**) + sizeof(int);
   strlcpy(file_name_cpy, file_name, strlen(file_name) + 1);
   // get all arguments in file_name_cpy
@@ -464,22 +461,22 @@ void args_load(const char* file_name, void** esp) {
   // push all arguments onto user stack, record the location of each arg on the stack
   // accumulate the used bytes on stack
   int argByteCount = 0;
-  char** argsAddrInStack = (char**) malloc(sizeof(char*) * nArgs + 1);
+  char** argsAddrInStack = (char**)malloc(sizeof(char*) * nArgs + 1);
   char* arg;
   for (int argIndex = nArgs - 1; argIndex >= 0; argIndex--) {
     arg = args[argIndex];
     argByteCount = sizeof(char) * (strlen(arg) + 1);
     allByteCount += argByteCount;
     push_stack(esp, arg, argByteCount);
-    argsAddrInStack[argIndex] = (char*) *esp;
+    argsAddrInStack[argIndex] = (char*)*esp;
   }
   // push stack-aglin onto user stack
   argByteCount = sizeof(uint8_t) * ((0b10000 - (allByteCount & 0b1111)) & 0b1111);
-  uint8_t *arg_zeros = calloc(argByteCount / sizeof(uint8_t), sizeof(uint8_t));
+  uint8_t* arg_zeros = calloc(argByteCount / sizeof(uint8_t), sizeof(uint8_t));
   push_stack(esp, arg_zeros, sizeof(uint8_t) * argByteCount);
   free(arg_zeros);
   // push NULL ptr after stack-aglin by convention
-  char* null_ptr = (char*) NULL;
+  char* null_ptr = (char*)NULL;
   push_stack(esp, &null_ptr, sizeof(char*));
   // push all pointers to argument onto the user stack
   push_stack(esp, argsAddrInStack, sizeof(char*) * nArgs);
@@ -512,7 +509,6 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
     goto done;
   process_activate();
 
-
   /* Open executable file. */
   file = filesys_open(t->pcb->process_name, NULL);
 
@@ -520,7 +516,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
     printf("load: %s: open failed\n", file_name);
     goto done;
   }
-  
+
   /* Read and verify executable header. */
   if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr ||
       memcmp(ehdr.e_ident, "\177ELF\1\1\1", 7) || ehdr.e_type != 2 || ehdr.e_machine != 3 ||

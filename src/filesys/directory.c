@@ -130,9 +130,7 @@ struct dir* tracing(const char* path, bool is_md) {
 }
 
 /* Getter for inode_sector */
-block_sector_t get_inode_sector(struct dir* de) {
-  return get_bst(de->inode);
-}
+block_sector_t get_inode_sector(struct dir* de) { return get_bst(de->inode); }
 
 /* Use similar logic as dir_readdir() to retrieve the corresponding dir_entry
   and check whether it is file or directory */

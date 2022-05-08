@@ -133,7 +133,6 @@ off_t file_tell(struct file* file) {
   return file->pos;
 }
 
-
 // /* Return the block_sector_t of the file inode */
 block_sector_t file_get_inumber(struct file* file) {
   ASSERT(file != NULL);

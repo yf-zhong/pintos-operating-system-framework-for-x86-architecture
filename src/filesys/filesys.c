@@ -15,13 +15,9 @@ struct block* fs_device;
 
 static void do_format(void);
 
-unsigned int fs_device_read() {
-  return read_cnt(fs_device);
-}
+unsigned int fs_device_read() { return read_cnt(fs_device); }
 
-unsigned int fs_device_write() {
-  return write_cnt(fs_device);
-}
+unsigned int fs_device_write() { return write_cnt(fs_device); }
 
 /* Initializes the file system module.
    If FORMAT is true, reformats the file system. */
@@ -64,8 +60,9 @@ bool filesys_create(const char* name, off_t initial_size) {
   if (!check) {
     return false;
   }
-  bool success = (d != NULL && free_map_allocate(1, &inode_sector) &&
-                  inode_create(inode_sector, initial_size) && dir_add(d, last_name, inode_sector, false));
+  bool success =
+      (d != NULL && free_map_allocate(1, &inode_sector) &&
+       inode_create(inode_sector, initial_size) && dir_add(d, last_name, inode_sector, false));
   if (!success && inode_sector != 0)
     free_map_release(inode_sector, 1);
   dir_close(d);
@@ -132,7 +129,7 @@ bool filesys_remove(const char* name) {
       return false;
     }
   }
-  
+
   bool result = dir_remove(parent_dir, last_name);
   dir_close(d);
   dir_close(parent_dir);

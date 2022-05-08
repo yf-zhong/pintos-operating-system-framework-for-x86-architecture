@@ -159,8 +159,8 @@ void sema_up(sema_t* sema) {
 
 tid_t get_tid(void) { return syscall0(SYS_GET_TID); }
 
-unsigned int cache_hit_cnt(void) {return syscall0(SYS_CACHE_HIT); }
+unsigned int cache_hit_cnt(void) { return syscall0(SYS_CACHE_HIT); }
 
-void cache_reset(void) {syscall0(SYS_CACHE_RESET); }
+void cache_reset(void) { syscall0(SYS_CACHE_RESET); }
 
-unsigned int fs_device_write_cnt(void) {return syscall0(SYS_BLOCK_WRITE); }
+unsigned int fs_device_write_cnt(void) { return syscall0(SYS_BLOCK_WRITE); }

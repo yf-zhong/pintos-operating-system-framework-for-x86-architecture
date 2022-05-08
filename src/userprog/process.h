@@ -11,7 +11,6 @@
 #define MAX_THREADS 127
 #define ERROR -1
 
-
 /* PIDs and TIDs are the same type. PID should be
    the TID of the main thread of the process */
 typedef tid_t pid_t;
@@ -44,19 +43,19 @@ struct process {
   struct thread* main_thread; /* Pointer to main thread */
   struct list children;
   struct child* curr_as_child;
-  char *file_name;
+  char* file_name;
   struct file* curr_executable;
-  int cur_fd;                 /* The fd number assigned to new file */
+  int cur_fd;                        /* The fd number assigned to new file */
   struct list file_descriptor_table; /* All the files opened in current process */
-  struct dir* cwd;       /* current working directory of the process */
+  struct dir* cwd;                   /* current working directory of the process */
 };
 
-// NEW_c has to come first so that 
+// NEW_c has to come first so that
 // FILE_NAME can have the remaining space
 typedef struct start_proc_arg {
   struct child* new_c;
   char* file_name;
-  struct dir* cwd;      /* current working directory of the process */
+  struct dir* cwd; /* current working directory of the process */
 } SPA;
 
 void userprog_init(void);
