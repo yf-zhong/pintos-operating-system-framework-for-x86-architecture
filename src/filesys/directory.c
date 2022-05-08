@@ -38,6 +38,7 @@ void remove_dot(const char* p, char* container) {
   while (result > 0) {
     strlcat(container, last, len);
     strlcat(container, "/", len);
+    result = get_next_part(last, &p);
   }
   if (result < 0) {
     container[0] = '\0';
@@ -115,7 +116,7 @@ struct dir* tracing(const char* path, bool is_md) {
       return NULL;
     } else {
       dir_close(root);
-      return cwd;
+      return dir_reopen(cwd);
     }
   }
 }
@@ -198,7 +199,7 @@ bool dir_create(block_sector_t sector, size_t entry_cnt) {
 struct dir* dir_open(struct inode* inode) {
   struct dir* dir = calloc(1, sizeof *dir);
   if (inode != NULL && dir != NULL) {
-    dir->inode = inode_reopen(inode);
+    dir->inode = inode;
     dir->pos = 0;
     return dir;
   } else {
