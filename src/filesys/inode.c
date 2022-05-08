@@ -115,9 +115,9 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
 
     // Read second level indirect pointer
     block_sector_t* indir2_content = calloc(BLOCK_SECTOR_SIZE, 1);
-    cache_read((void*)indir2_content, indir_content[sector_num / INUMBER_PER_BLOCK]); // Start from 0, no need to + 1
+    cache_read((void*)indir2_content, indir_content[(sector_num - 1) / INUMBER_PER_BLOCK]); // Start from 0, no need to + 1
     
-    block_sector_t result = indir2_content[sector_num % INUMBER_PER_BLOCK - 1];
+    block_sector_t result = indir2_content[(sector_num - 1) % INUMBER_PER_BLOCK];
     free(inode_content);
     free(indir_content);
     free(indir2_content);
