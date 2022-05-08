@@ -34,9 +34,13 @@ void remove_dot(const char* p, char* container) {
   container[0] = '\0';
   char last[NAME_MAX + 1];
   size_t len = strlen(p) + 2;
-  while (get_next_part(last, &p) != 0) {
+  int result = get_next_part(last, &p);
+  while (result > 0) {
     strlcat(container, last, len);
     strlcat(container, "/", len);
+  }
+  if (result < 0) {
+    container[0] = '\0';
   }
 }
 
@@ -164,11 +168,17 @@ static int get_next_part(char part[NAME_MAX + 1], const char** srcp) {
   return 1;
 }
 
-void get_last_name(const char* dir, char name[NAME_MAX + 1]) {
+bool get_last_name(const char* dir, char name[NAME_MAX + 1]) {
   char last[NAME_MAX + 1];
-  while (get_next_part(last, &dir) != 0) {
+  int result = get_next_part(last, &dir);
+  while (result > 0) {
     strlcpy(name, last, NAME_MAX + 1);
+    result = get_next_part(last, &dir);
   }
+  if (result < 0) {
+    return false;
+  }
+  return true;
 }
 
 /* Creates a directory with space for ENTRY_CNT entries in the

@@ -59,7 +59,10 @@ bool filesys_create(const char* name, off_t initial_size) {
     return false;
   }
   char last_name[NAME_MAX + 1];
-  get_last_name(name, last_name);
+  bool check = get_last_name(name, last_name);
+  if (!check) {
+    return false;
+  }
   bool success = (d != NULL && free_map_allocate(1, &inode_sector) &&
                   inode_create(inode_sector, initial_size) && dir_add(d, last_name, inode_sector, false));
   if (!success && inode_sector != 0)

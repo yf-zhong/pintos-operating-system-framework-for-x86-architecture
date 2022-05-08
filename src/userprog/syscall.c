@@ -294,7 +294,11 @@ void sys_mkdir(struct intr_frame* f, const char* dir) {
     return;
   }
   char name[NAME_MAX + 1];
-  get_last_name(dir, name);
+  bool check = get_last_name(dir, name);
+  if (!check) {
+    f->eax = false;
+    return;
+  }
   struct inode* unused;
   if (dir_lookup(d, name, &unused)) {
     dir_close(d);
