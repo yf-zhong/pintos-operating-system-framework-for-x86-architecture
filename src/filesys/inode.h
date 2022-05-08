@@ -20,4 +20,8 @@ void inode_deny_write(struct inode*);
 void inode_allow_write(struct inode*);
 off_t inode_length(const struct inode*);
 
+/* helper for proj3 task3 */
+int get_open_cnt(struct inode*);
+int get_bst(struct inode*);
+
 #endif /* filesys/inode.h */
