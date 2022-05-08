@@ -52,6 +52,7 @@ void filesys_done(void) {
    Returns true if successful, false otherwise.
    Fails if a file named NAME already exists,
    or if internal memory allocation fails. */
+/* change the directory to the directory specified in path */
 bool filesys_create(const char* name, off_t initial_size) {
   block_sector_t inode_sector = 0;
   struct dir* d = tracing(name, true);
@@ -77,6 +78,7 @@ bool filesys_create(const char* name, off_t initial_size) {
    otherwise.
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
+/* change the directory to the directory specified in path */
 struct file* filesys_open(const char* name, bool* is_dir) {
   struct dir* d = tracing(name, false);
   if (d == NULL) {
@@ -98,6 +100,7 @@ struct file* filesys_open(const char* name, bool* is_dir) {
    Returns true if successful, false on failure.
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
+/* change the directory to the directory specified in path */
 bool filesys_remove(const char* name) {
   struct dir* d = tracing(name, false);
   if (d == NULL) {
