@@ -385,9 +385,9 @@ void inode_close(struct inode* inode) {
   /* Release resources if this was the last opener. */
   if (--inode->open_cnt == 0) {
     /* Remove from inode list and release lock. */
-    lock_acquire(&inode->inode_lock);
+    lock_acquire(&inode_list_lock);
     list_remove(&inode->elem);
-    lock_release(&inode->inode_lock);
+    lock_release(&inode_list_lock);
 
     /* Deallocate blocks if removed. */
     if (inode->removed) {
