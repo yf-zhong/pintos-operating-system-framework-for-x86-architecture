@@ -20,35 +20,6 @@ struct block {
   unsigned long long write_cnt; /* Number of sectors written. */
 };
 
-unsigned int read_cnt(struct block* b) {
-  return b->read_cnt;
-}
-
-unsigned int write_cnt(struct block* b) {
-  return b->write_cnt;
-}
-
-unsigned int total_block_read_b() {
-  unsigned int cnt = 0;
-  struct block* b = block_first();
-  while (b != NULL) {
-    cnt += read_cnt(b);
-    b = block_next(b);
-  }
-  return cnt;
-}
-
-unsigned int total_block_write_b() {
-  unsigned int cnt = 0;
-  struct block* b = block_first();
-  while (b != NULL) {
-    cnt += write_cnt(b);
-    b = block_next(b);
-  }
-  return cnt;
-}
-
-
 /* List of all block devices. */
 static struct list all_blocks = LIST_INITIALIZER(all_blocks);
 

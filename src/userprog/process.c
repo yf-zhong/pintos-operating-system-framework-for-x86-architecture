@@ -253,7 +253,6 @@ void decrement_ref_cnt(CHILD* cptr) {
   lock_acquire(&cptr->ref_lock);
   cptr->ref_cnt--;
   if (cptr->ref_cnt == 0) {
-    lock_release(&cptr->ref_lock);
     palloc_free_page(cptr);
     return;
   }
@@ -531,6 +530,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
     printf("load: %s: open failed\n", file_name);
     goto done;
   }
+  file_deny_write(file);
   
   /* Read and verify executable header. */
   if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr ||
