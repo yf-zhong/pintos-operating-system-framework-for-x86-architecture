@@ -282,6 +282,7 @@ void sys_chdir(struct intr_frame* f, const char* dir) {
     f->eax = false;
     return;
   }
+  dir_close(thread_current()->pcb->cwd);
   thread_current()->pcb->cwd = d;
   f->eax = true;
 }

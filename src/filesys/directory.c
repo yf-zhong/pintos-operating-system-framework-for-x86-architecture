@@ -150,12 +150,12 @@ bool check_is_dir(struct dir* parent_dir, char name[NAME_MAX + 1]) {
 static int get_next_part(char part[NAME_MAX + 1], const char** srcp) {
   const char* src = *srcp;
   char* dst = part;
-  /* Skip leading slashes. If it's all slashes, we're done. */
-  while (*src == '/') {
-    src++;
-  }
   /* Copy up to NAME_MAX character from SRC to DST. Add null terminator. */
   do {
+    /* Skip leading slashes. If it's all slashes, we're done. */
+    while (*src == '/') {
+      src++;
+    }
     if (*src == '\0') {
       return 0;
     }
