@@ -52,12 +52,16 @@ void cut_path(char* p, char* container) {
 }
 
 /* parsing the path and trace the directory until no more path string or error occurs. 
-Mainly used in mkdir and chdir */
+Mainly used in mkdir and chdir 
+if is_md is true, find the parent directory of given path
+open the returning directory
+*/
 struct dir* tracing(const char* path, bool is_md) {
   if (strcmp(path, "") == 0) {
     return NULL;
   }
   char clean_path[strlen(path) + 2];
+  strlcpy(clean_path, "", sizeof(clean_path));
   remove_dot(path, clean_path);
   if (is_md) {
     char temp[strlen(path) + 2];
@@ -66,13 +70,14 @@ struct dir* tracing(const char* path, bool is_md) {
   }
   struct dir* root = dir_open_root();
   struct dir* cwd = thread_current()->pcb->cwd;
-  char curr[NAME_MAX + 1];
+  char curr[NAME_MAX + 1] = "";
   struct dir* curr_dir = NULL;
   struct inode* curr_inode = NULL;
   char* clean_path_ptr = clean_path;
   int flag = get_next_part(curr, &clean_path_ptr);
 
   if (flag > 0) {
+    // if can find current_name in either cwd or root
     if (dir_lookup(cwd, curr, &curr_inode) || dir_lookup(root, curr, &curr_inode)) {
       dir_close(root);
       curr_dir = dir_open(curr_inode);
@@ -105,7 +110,8 @@ struct dir* tracing(const char* path, bool is_md) {
       dir_close(root);
       return NULL;
     } else {
-      return root;
+      dir_close(root);
+      return cwd;
     }
   }
 }
@@ -182,7 +188,7 @@ bool dir_create(block_sector_t sector, size_t entry_cnt) {
 struct dir* dir_open(struct inode* inode) {
   struct dir* dir = calloc(1, sizeof *dir);
   if (inode != NULL && dir != NULL) {
-    dir->inode = inode;
+    dir->inode = inode_reopen(inode);
     dir->pos = 0;
     return dir;
   } else {
