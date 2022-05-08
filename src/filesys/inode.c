@@ -72,6 +72,7 @@ int get_bst(struct inode* inode) {
    POS. */
 static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
   ASSERT(inode != NULL);
+  // Get inode on disk
   struct inode_disk* inode_content = calloc(BLOCK_SECTOR_SIZE, 1);
   if (inode_content == NULL) {
     free(inode_content);
@@ -82,9 +83,12 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
     free(inode_content);
     return -1;
   }
+
+  // Calculate how many actual data sectors is required
   int sector_num = pos / BLOCK_SECTOR_SIZE + 1;
 
   if (sector_num <= DIR_NUM) {
+    // The targeted sector is under direct pointer
     block_sector_t result = inode_content->direct[sector_num - 1];
     free(inode_content);
     if (result == 0) {
@@ -93,6 +97,7 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
       return result;
     }
   } else if (sector_num <= MAX_WITHOUT_D_INDIR) {
+    // The targeted sector is under indirect pointer
     sector_num -= DIR_NUM;
     block_sector_t* indir_content = calloc(BLOCK_SECTOR_SIZE, 1);
     if (indir_content == NULL) {
@@ -108,6 +113,7 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
       return result;
     }
   } else {
+    // The targeted sector is under doubly indirect pointer
     sector_num -= MAX_WITHOUT_D_INDIR;
     // Read first level indirect pointer
     block_sector_t* indir_content = calloc(BLOCK_SECTOR_SIZE, 1);
@@ -153,6 +159,7 @@ bool inode_resize(struct inode_disk* ind_d, off_t size) {
   off_t old_size = ind_d->length;
   ind_d->length = size;
 
+  // Get old and new block numbers including internal nodes
   size_t num_block_old = bytes_to_blocks(old_size);
   size_t num_block_new = bytes_to_blocks(size);
 
@@ -168,7 +175,7 @@ bool inode_resize(struct inode_disk* ind_d, off_t size) {
     ind_d->length = old_size;
     return false;
   }
-  // if allocate not success
+  // If allocate not success
   if (!free_map_allocate_non_consecutive(new_alloc_num, new_block_list)) {
     free(new_block_list);
     ind_d->length = old_size;
@@ -195,6 +202,7 @@ bool inode_resize(struct inode_disk* ind_d, off_t size) {
       cache_write(zeros, ind_d->direct[i]);
     }
   }
+  // Check if the following block is necessary
   if (ind_d->indirect == 0 && size <= DIR_NUM * BLOCK_SECTOR_SIZE) {
     free(new_block_list);
     return true;
@@ -306,6 +314,7 @@ bool inode_create(block_sector_t sector, off_t length) {
     disk_inode->length = 0;
     disk_inode->magic = INODE_MAGIC;
 
+    // Resize the zero length to the targeted length
     if (inode_resize(disk_inode, length)) {
       cache_write(disk_inode, sector);
       success = true;
@@ -475,7 +484,7 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
     return 0;
   }
   cache_read(ind_d, inode->sector);
-
+  // Acquire lock before resize the node
   lock_acquire(&inode->inode_lock);
   if (new_length > ind_d->length) {
     if (!inode_resize(ind_d, new_length)) {
@@ -537,6 +546,7 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
 /* Disables writes to INODE.
    May be called at most once per inode opener. */
 void inode_deny_write(struct inode* inode) {
+  // Protect inode deny write cnt with inode lock
   lock_acquire(&inode->inode_lock);
   inode->deny_write_cnt++;
   ASSERT(inode->deny_write_cnt <= inode->open_cnt);
@@ -547,6 +557,7 @@ void inode_deny_write(struct inode* inode) {
    Must be called once by each inode opener who has called
    inode_deny_write() on the inode, before closing the inode. */
 void inode_allow_write(struct inode* inode) {
+  // Protect inode deny write cnt with inode lock
   lock_acquire(&inode->inode_lock);
   ASSERT(inode->deny_write_cnt > 0);
   ASSERT(inode->deny_write_cnt <= inode->open_cnt);
