@@ -30,6 +30,10 @@ struct inode* get_inode(struct dir* dir) {
   return dir->inode;
 }
 
+/* Used to remove all the "." in the path given.
+  Do this because "." will be very annoying when we
+  try to find the parent directory through the path.
+*/
 void remove_dot(const char* p, char* container) {
   container[0] = '\0';
   char last[NAME_MAX + 1];
@@ -45,6 +49,10 @@ void remove_dot(const char* p, char* container) {
   }
 }
 
+/* Remove the final portion of the path.
+  i.e. take the path of the parent directory
+  of the file/dir given.
+*/
 void cut_path(char* p, char* container) {
   size_t len = strlen(p);
   if (len == 0) {
@@ -126,6 +134,8 @@ block_sector_t get_inode_sector(struct dir* de) {
   return get_bst(de->inode);
 }
 
+/* Use similar logic as dir_readdir() to retrieve the corresponding dir_entry
+  and check whether it is file or directory */
 bool check_is_dir(struct dir* parent_dir, char name[NAME_MAX + 1]) {
   if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) {
     return true;
@@ -175,6 +185,7 @@ static int get_next_part(char part[NAME_MAX + 1], const char** srcp) {
   return 1;
 }
 
+/* get the last name of the path. That is, retrieve the actual "file name" from a complete path. */
 bool get_last_name(const char* dir, char name[NAME_MAX + 1]) {
   char last[NAME_MAX + 1];
   int result = get_next_part(last, &dir);
