@@ -1,4 +1,4 @@
-Pintos Group Repository
+Pintos Repository
 =======================
 
 This repository contains code for PintOS projects.
